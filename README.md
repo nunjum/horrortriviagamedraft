@@ -22,6 +22,10 @@ A **first-person browser horror game** in the spirit of *Granny*, with trivia ab
 | **GitHub Pages** | Repo → *Settings* → *Pages* → *Deploy from branch* → `main` / `/ (root)`. |
 
 > Uploading through the GitHub website? Make sure `index.html` ends up in the **root** of the repo.
+>
+> **Open the `index.html` in the main folder, not `src/index.html`.** The `src/` copy is the unbuilt source and only runs through a local server. Opening it directly now redirects you to the right file. Viewing the file on github.com (or with an HTML-preview site) shows the code, not the game; use GitHub Pages to play it online.
+
+**Controls:** click once to begin. The game locks the mouse so you can look around; press **Esc** to pause. If your browser won't lock the mouse (some embedded previews and stricter browsers), the game says so: **hold the mouse button and drag** to look, click to interact, and use **Esc** to pause. Arrow keys also turn.
 
 🎧 **Play with headphones, in the dark.** Her footsteps come from where she actually is.
 
