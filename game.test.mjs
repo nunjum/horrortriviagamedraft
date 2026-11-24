@@ -4,10 +4,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Game } from '../js/state.js';
-import { TriviaEngine, validateQuestions } from '../js/trivia.js';
+import { Game } from '../src/js/state.js';
+import { TriviaEngine, validateQuestions } from '../src/js/trivia.js';
 
-const { questions } = JSON.parse(readFileSync(new URL('../data/questions.json', import.meta.url)));
+const { questions } = JSON.parse(readFileSync(new URL('../src/data/questions.json', import.meta.url)));
 
 // Deterministic RNG so test runs are reproducible
 function seeded(seed = 42) {

@@ -9,7 +9,7 @@ import { AudioEngine } from './audio.js';
 import * as store from './storage.js';
 import { ACHIEVEMENTS } from './storage.js';
 import { ROOMS, ITEMS, NOISE, HOTSPOTS, MAX_DAYS, DIFFICULTY } from './config.js';
-import { ROOM_ART, HOTSPOT_POS } from './art.js';
+import { ROOM_ART, HOTSPOT_POS, TITLE_ART } from './art.js';
 
 const $ = (sel) => document.querySelector(sel);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -30,6 +30,7 @@ const el = {
   body: document.body,
   scene: $('#scene'),
   art: $('#room-art'),
+  fx: $('#room-fx'),
   roomName: $('#room-name'),
   roomDesc: $('#room-desc'),
   hotspots: $('#hotspots'),
@@ -61,8 +62,8 @@ const el = {
 // ═════════════ boot ═════════════
 async function boot() {
   try {
-    const res = await fetch('data/questions.json');
-    const json = await res.json();
+    // The single-file build embeds the questions; the dev version fetches them
+    const json = window.__QUESTIONS__ ?? (await (await fetch('data/questions.json')).json());
     questions = json.questions;
     const errs = validateQuestions(questions);
     if (errs.length) console.warn('[questions.json]', errs);
@@ -70,9 +71,10 @@ async function boot() {
     console.error(err);
     $('#btn-start').disabled = true;
     $('#title-best').textContent =
-      'Could not load data/questions.json — run a local server (see README) instead of opening the file directly.';
+      'Could not load the questions. Open the root index.html (the single-file build), or run a local server for src/.';
     return;
   }
+  $('#title-art').innerHTML = TITLE_ART;
   applySettings();
   renderTitleBest();
   startStatic();
@@ -140,7 +142,9 @@ function render(state) {
 
   if (lastRoom !== state.currentRoom) {
     el.scene.dataset.room = state.currentRoom;
-    el.art.innerHTML = ROOM_ART[state.currentRoom] ?? '';
+    const art = ROOM_ART[state.currentRoom];
+    el.art.innerHTML = art?.base ?? '';
+    el.fx.innerHTML = art?.fx ?? '';
     lastRoom = state.currentRoom;
   }
   const dark = game.isDark();
@@ -157,20 +161,33 @@ function render(state) {
     const [x, y] = HOTSPOT_POS[h.id] ?? [50, 50];
     b.style.left = `${x}%`;
     b.style.top = `${y}%`;
-    b.textContent = h.label;
+    b.setAttribute('aria-label', h.label);
+    const ring = document.createElement('span');
+    ring.className = 'ring';
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = h.label;
     const cost = costHint(h);
     if (cost) {
       const c = document.createElement('span');
       c.className = 'cost';
       c.textContent = cost;
-      b.append(c);
+      label.append(c);
     }
+    b.append(ring, label);
     b.addEventListener('click', () => game?.interact(h.id));
     el.hotspots.append(b);
   }
 
-  // exits
+  // exits (+ the room's actions, shown here on small screens)
   el.exits.innerHTML = '';
+  for (const h of game.visibleHotspots()) {
+    const b = document.createElement('button');
+    b.className = 'exit action' + (h.status === 'used' ? ' used' : '');
+    b.textContent = h.label;
+    b.addEventListener('click', () => game?.interact(h.id));
+    el.exits.append(b);
+  }
   for (const x of game.exits()) {
     const b = document.createElement('button');
     b.className = 'exit' + (x.locked ? ' locked' : '');
@@ -288,6 +305,7 @@ async function runEncounter(e) {
   el.body.dataset.phase = 'encounter';
   el.enc.hidden = false;
   el.enc.className = `overlay encounter ${e.kind}`;
+  el.enc.dataset.room = e.room;
   el.encTitle.textContent = ENC_COPY[e.kind].title;
   el.encBody.hidden = true;
   el.encIntro.hidden = false;

@@ -1,0 +1,3221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- BUILT FILE — edit src/ and run `node build.mjs` -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Don't Make a Sound</title>
+  <meta name="description" content="A browser horror stealth escape game where horror trivia is the only thing keeping you hidden." />
+  <meta name="theme-color" content="#050505" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23000'/><circle cx='35' cy='42' r='8' fill='%23b00'/><circle cx='65' cy='42' r='8' fill='%23b00'/></svg>" />
+  <style>html,body{background:#050505;color:#cfc6b2;margin:0}</style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+/* ─────────────────────────────────────────────────────────────
+   Don't Make a Sound — atmosphere
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  --bg: #050505;
+  --ink: #cfc6b2;          /* bone */
+  --dim: #6f675b;
+  --faint: #2a2622;
+  --blood: #7a0a0a;
+  --red: #e11d1d;
+  --sick: #8fa37a;
+  --font-display: 'Special Elite', 'Courier New', monospace;
+  --font-body: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* driven by JS */
+  --mx: 50vw;
+  --my: 50vh;
+  --beam: 280px;
+  --outer: 0.55;
+  --shake: 0px;
+  --static: 0.05;
+  --bloodiness: 0;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; }
+kbd {
+  font-family: var(--font-body);
+  font-size: 0.75em;
+  border: 1px solid var(--dim);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 0.35em;
+  color: var(--dim);
+}
+[hidden] { display: none !important; }
+
+/* ── Day-based dread ─────────────────────────────────────── */
+body[data-day="1"] { --static: 0.035; --bloodiness: 0;    --outer: 0.3; }
+body[data-day="2"] { --static: 0.05; --bloodiness: 0.18; --outer: 0.38; }
+body[data-day="3"] { --static: 0.07; --bloodiness: 0.34; --outer: 0.46; }
+body[data-day="4"] { --static: 0.09; --bloodiness: 0.5;  --outer: 0.54; }
+body[data-day="5"] { --static: 0.12; --bloodiness: 0.7;  --outer: 0.62; }
+body[data-phase="encounter"] { --static: 0.1; }
+
+#static {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 42;
+  opacity: var(--static);
+  mix-blend-mode: screen;
+  image-rendering: pixelated;
+  transition: opacity 1.2s;
+}
+
+.vignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 40;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.85) 100%);
+}
+
+.blood {
+  position: fixed; inset: 0; pointer-events: none; z-index: 41;
+  opacity: var(--bloodiness);
+  transition: opacity 2s;
+  background:
+    radial-gradient(ellipse at 0% 0%,   rgba(120,0,0,0.9), transparent 35%),
+    radial-gradient(ellipse at 100% 0%, rgba(90,0,0,0.8),  transparent 30%),
+    radial-gradient(ellipse at 0% 100%, rgba(90,0,0,0.85), transparent 38%),
+    radial-gradient(ellipse at 100% 100%, rgba(130,0,0,0.9), transparent 34%),
+    radial-gradient(ellipse at center, transparent 55%, rgba(60,0,0,0.7) 100%);
+  mix-blend-mode: multiply;
+}
+
+/* ── Screens ─────────────────────────────────────────────── */
+.screen {
+  /* absolute (not fixed) so it doesn't trap the HUD in its own stacking context */
+  position: absolute; inset: 0;
+  display: none;
+}
+.screen.active { display: flex; }
+
+/* Title */
+#screen-title {
+  align-items: center; justify-content: flex-start;
+  text-align: center;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at var(--mx) var(--my), rgba(207,198,178,0.07), transparent 260px),
+    radial-gradient(ellipse at 50% 120%, #1a0606 0%, var(--bg) 60%);
+}
+.title-wrap { max-width: 760px; }
+.kicker {
+  font-size: 0.75rem; letter-spacing: 0.4em; text-transform: uppercase;
+  color: var(--dim); margin: 0 0 1rem;
+}
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; }
+#game-title {
+  font-size: clamp(2.4rem, 8vw, 5.4rem);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  text-shadow: 0 0 24px rgba(225,29,29,0.25);
+}
+.tagline { color: var(--dim); margin: 1.4rem auto 2.2rem; max-width: 34em; }
+.menu { display: flex; flex-direction: column; gap: 0.6rem; align-items: center; }
+.menu .btn { min-width: 260px; }
+.best { color: var(--dim); font-size: 0.8rem; min-height: 1.2em; margin-top: 1.5rem; }
+.warning { color: #5a534a; font-size: 0.72rem; margin-top: 1.5rem; }
+.warning strong { color: var(--dim); }
+
+/* Glitch text */
+.glitch { position: relative; display: inline-block; }
+.glitch::before, .glitch::after {
+  content: attr(data-text);
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+.glitch::before { color: var(--red); mix-blend-mode: screen; animation: glitch-a 3.7s infinite steps(1); }
+.glitch::after  { color: #3df;       mix-blend-mode: screen; opacity: 0.35; animation: glitch-b 4.3s infinite steps(1); }
+@keyframes glitch-a {
+  0%, 91%, 100% { transform: none; clip-path: inset(0 0 100% 0); }
+  92% { transform: translate(-3px, 1px); clip-path: inset(20% 0 55% 0); }
+  94% { transform: translate(4px, -1px); clip-path: inset(62% 0 12% 0); }
+  96% { transform: translate(-2px, 0);   clip-path: inset(40% 0 40% 0); }
+}
+@keyframes glitch-b {
+  0%, 87%, 100% { transform: none; clip-path: inset(0 0 100% 0); }
+  88% { transform: translate(3px, 0);  clip-path: inset(10% 0 70% 0); }
+  90% { transform: translate(-4px, 1px); clip-path: inset(75% 0 5% 0); }
+}
+
+/* Buttons */
+.btn {
+  background: transparent;
+  border: 1px solid var(--faint);
+  color: var(--ink);
+  padding: 0.7rem 1.2rem;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.btn:hover, .btn:focus-visible {
+  border-color: var(--blood);
+  background: rgba(122,10,10,0.15);
+  outline: none;
+}
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn-primary { border-color: var(--blood); }
+.btn-primary:hover { background: var(--blood); color: #fff; }
+.btn-small { padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+.btn-danger { color: #d66; }
+.btn.on { border-color: var(--ink); background: rgba(207,198,178,0.1); }
+
+/* ── Game screen ─────────────────────────────────────────── */
+#screen-game { flex-direction: column; }
+
+.hud {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0.8rem 1.4rem;
+  border-bottom: 1px solid #141210;
+  background: linear-gradient(#0a0908, #050505);
+  position: relative; z-index: 30;
+}
+.hud-label { font-size: 0.68rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--dim); }
+.hud-day { font-family: var(--font-display); display: flex; align-items: baseline; gap: 0.5rem; }
+#day-num { font-size: 2rem; color: var(--red); line-height: 1; }
+.of { color: var(--dim); }
+.hud-noise { max-width: 520px; width: 100%; justify-self: center; }
+#noise-val { color: var(--ink); letter-spacing: 0.05em; }
+.meter {
+  position: relative;
+  height: 10px;
+  margin-top: 0.3rem;
+  background: #120f0d;
+  border: 1px solid #1e1a17;
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #3d3a33, #8a7a4a 50%, #a11 80%, #f22);
+  background-size: 520px 100%;
+  transition: width 0.45s cubic-bezier(.2,.8,.2,1);
+}
+.meter-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(0,0,0,0.7); }
+.meter.hot .meter-fill { animation: throb 0.6s infinite alternate; }
+.meter.bump { animation: bump 0.35s; }
+@keyframes throb { from { filter: brightness(1); } to { filter: brightness(1.6); } }
+@keyframes bump { 30% { transform: scaleY(1.8); } }
+.hud-actions { display: flex; gap: 0.4rem; }
+
+.stage {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  min-height: 0;
+}
+
+.scene {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  cursor: crosshair;
+  transition: filter 0.6s;
+}
+.scene.shake { animation: shake 0.4s; }
+.scene.shake-big { animation: shake-big 0.7s; }
+
+
+.room-text {
+  position: absolute; left: 1.6rem; top: 1.2rem; right: 1.6rem;
+  max-width: 560px;
+  z-index: 3;
+  text-shadow: 0 2px 8px #000;
+}
+#room-name { font-size: 2rem; letter-spacing: 0.04em; }
+#room-desc { color: #a59d8e; margin: 0.4rem 0 0; font-size: 0.9rem; }
+
+.exits {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem;
+  padding: 1rem;
+  z-index: 4;
+  background: linear-gradient(transparent, rgba(0,0,0,0.85));
+}
+.exit {
+  background: rgba(10,8,7,0.8);
+  border: 1px solid #2a2420;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+}
+.exit::before { content: '▸ '; color: var(--dim); }
+.exit:hover, .exit:focus-visible { border-color: var(--ink); outline: none; }
+.exit.locked { color: var(--dim); }
+.exit.locked::before { content: '🔒 '; }
+
+/* Flashlight darkness — follows the cursor */
+.darkness {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  background: radial-gradient(circle var(--beam) at var(--mx) var(--my),
+    rgba(0,0,0,0) 0%,
+    rgba(0,0,0,0.05) 55%,
+    rgba(0,0,0,var(--outer)) 100%);
+  transition: --outer 0.6s;
+}
+.scene.pitch .darkness {
+  --beam: 70px;
+  --outer: 0.985;
+}
+.scene.torch .darkness {
+  --beam: 220px;
+  --outer: 0.96;
+  background: radial-gradient(circle var(--beam) at var(--mx) var(--my),
+    rgba(255,240,200,0.11) 0%,
+    rgba(0,0,0,0.1) 60%,
+    rgba(0,0,0,var(--outer)) 100%);
+}
+.scene.torch.flicker .darkness { animation: flicker 0.25s steps(2) 2; }
+@keyframes flicker { 50% { --outer: 1; opacity: 1; background: #000; } }
+
+/* Sidebar */
+.side {
+  border-left: 1px solid #141210;
+  background: #070605;
+  padding: 1rem 1.1rem;
+  overflow-y: auto;
+  position: relative; z-index: 20;
+}
+.side h3 {
+  font-size: 0.7rem; letter-spacing: 0.35em; text-transform: uppercase;
+  font-family: var(--font-body); color: var(--dim);
+  margin: 0.3rem 0 0.6rem;
+}
+.inventory { list-style: none; padding: 0; margin: 0 0 1.4rem; min-height: 2rem; }
+.inventory li { padding: 0.35rem 0; border-bottom: 1px dotted #1f1b18; font-size: 0.85rem; }
+.inventory li small { display: block; color: var(--dim); font-size: 0.72rem; }
+.inventory li.new { animation: newitem 1.5s; }
+.inventory .empty { color: #4a443c; font-style: italic; border: 0; }
+@keyframes newitem { 0% { color: var(--red); transform: translateX(6px); } 100% { color: var(--ink); } }
+
+.log { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.log li { font-size: 0.8rem; color: #9d9587; border-left: 2px solid #1f1b18; padding-left: 0.6rem; animation: logIn 0.4s; }
+.log li:not(:first-child) { opacity: 0.55; }
+.log li.warn  { border-color: #7a4a0a; }
+.log li.item  { border-color: var(--red); color: var(--ink); }
+.log li.clue  { border-color: #556; font-family: var(--font-display); color: var(--ink); font-size: 0.86rem; }
+.log li.calm  { border-color: #345; }
+.log li.day   { border-color: var(--red); color: var(--red); }
+@keyframes logIn { from { opacity: 0; transform: translateY(-4px); } }
+
+/* ── Overlays ────────────────────────────────────────────── */
+.overlay {
+  position: fixed; inset: 0;
+  z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0,0,0,0.82);
+  backdrop-filter: blur(2px);
+}
+.panel-box, .end-box, .wake-box {
+  width: min(640px, 100%);
+  max-height: 90vh; overflow-y: auto;
+  background: #0a0908;
+  border: 1px solid #1f1b18;
+  padding: 2rem;
+  box-shadow: 0 0 80px rgba(0,0,0,0.9), inset 0 0 60px rgba(122,10,10,0.08);
+}
+.panel-box h2, .end-box h2 { font-size: 1.8rem; margin-bottom: 1rem; }
+.howto { padding-left: 1.2rem; margin: 0 0 1.4rem; }
+.howto li { margin-bottom: 0.6rem; color: #b2aa9b; }
+.howto strong { color: var(--ink); }
+.howto em { color: var(--red); font-style: normal; }
+
+.setting { display: block; border: 0; padding: 0; margin: 0 0 1.2rem; }
+.setting legend { font-size: 0.7rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--dim); margin-bottom: 0.4rem; }
+.setting label { display: block; margin: 0.3rem 0; cursor: pointer; }
+.setting input[type=range] { width: 100%; accent-color: var(--blood); }
+.setting input { accent-color: var(--blood); }
+.setting-actions { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1.5rem; }
+
+.stats, .end-stats {
+  display: grid; grid-template-columns: 1fr auto; gap: 0.3rem 1rem;
+  margin: 0 0 1.4rem; font-size: 0.85rem;
+}
+.stats dt, .end-stats dt { color: var(--dim); }
+.stats dd, .end-stats dd { margin: 0; text-align: right; }
+.achievements { list-style: none; padding: 0; margin: 0 0 1.4rem; display: grid; gap: 0.5rem; }
+.achievements li { padding: 0.6rem 0.8rem; border: 1px solid #1a1714; opacity: 0.4; }
+.achievements li.got { opacity: 1; border-color: var(--blood); }
+.achievements li strong { font-family: var(--font-display); font-weight: 400; display: block; }
+.achievements li span { font-size: 0.78rem; color: var(--dim); }
+
+/* Encounter */
+.encounter { background: rgba(0,0,0,0.9); z-index: 70; }
+.enc-box {
+  width: min(720px, 100%);
+  text-align: center;
+  transform: translate(0,0);
+}
+.enc-box.shaking { animation: shake-var 0.12s infinite; }
+.enc-kind {
+  font-size: 0.72rem; letter-spacing: 0.5em; text-transform: uppercase;
+  color: var(--red); margin: 0 0 0.8rem;
+  animation: pulse 1s infinite alternate;
+}
+.enc-intro {
+  font-family: var(--font-display);
+  font-size: 1.15rem; color: #aaa192;
+  margin: 0 auto 1.6rem; max-width: 34em; min-height: 3em;
+}
+.enc-progress { font-size: 0.75rem; letter-spacing: 0.3em; color: var(--dim); margin-bottom: 0.6rem; }
+.timer { height: 4px; background: #1a0404; overflow: hidden; }
+.timer-fill { height: 100%; width: 100%; background: var(--red); transform-origin: left; }
+.timer-num {
+  font-family: var(--font-display); font-size: 3.2rem; line-height: 1;
+  color: var(--red); margin: 0.8rem 0 0.4rem;
+  text-shadow: 0 0 20px rgba(225,29,29,0.6);
+}
+.timer-num.panic { animation: panic 0.25s infinite alternate; }
+.enc-question { font-size: clamp(1.15rem, 2.6vw, 1.6rem); line-height: 1.3; margin: 0.6rem auto 1.4rem; max-width: 30em; }
+.enc-options { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.enc-opt {
+  text-align: left;
+  background: #0b0908;
+  border: 1px solid #2a2420;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  display: flex; gap: 0.7rem; align-items: baseline;
+  transition: border-color 0.15s, background 0.15s;
+}
+.enc-opt .num { color: var(--red); font-size: 0.8rem; }
+.enc-opt:hover, .enc-opt:focus-visible { border-color: var(--ink); background: #151110; outline: none; }
+.enc-opt.right { border-color: #6a8a5a; background: rgba(60,90,40,0.25); }
+.enc-opt.wrong { border-color: var(--red); background: rgba(150,0,0,0.3); }
+.enc-opt:disabled { cursor: default; }
+.enc-hint { color: #4a443c; font-size: 0.72rem; margin-top: 1.2rem; }
+.encounter.lockpick .enc-kind { color: #b8a36a; animation: none; }
+.encounter.lockpick .timer-fill, .encounter.lockpick .timer-num { background: #b8a36a; color: #b8a36a; text-shadow: none; }
+.encounter.lockpick .timer-num { background: none; }
+
+/* Jump scare */
+.jumpscare {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; align-items: center; justify-content: center;
+  background: #000;
+  animation: scare-bg 1.3s forwards;
+}
+.jumpscare .face { height: 115vh; animation: scare-face 1.3s forwards; }
+@keyframes scare-bg {
+  0% { background: #fff; } 6% { background: #900; } 12% { background: #000; }
+  18% { background: #600; } 100% { background: #000; }
+}
+@keyframes scare-face {
+  0% { transform: scale(0.6) rotate(-4deg); filter: contrast(2) brightness(1.6); }
+  10% { transform: scale(1.25) rotate(3deg); }
+  14% { transform: scale(1.15) translate(-12px, 6px) rotate(-2deg); }
+  18% { transform: scale(1.3) translate(14px, -8px); }
+  80% { transform: scale(1.35); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* Day transition */
+.wake { background: #000; z-index: 80; }
+.wake-box { background: transparent; border: 0; box-shadow: none; text-align: center; }
+.wake-box h2 {
+  font-size: clamp(3rem, 12vw, 7rem); color: var(--red);
+  letter-spacing: 0.1em; animation: wake-in 2.4s;
+}
+.wake-box p { color: var(--dim); font-family: var(--font-display); font-size: 1.1rem; margin: 1rem 0 2rem; }
+@keyframes wake-in { 0% { opacity: 0; filter: blur(12px); letter-spacing: 0.6em; } 100% { opacity: 1; filter: blur(0); } }
+
+/* End */
+.end-box { text-align: center; }
+.end-box h2 { font-size: clamp(2rem, 6vw, 3.4rem); }
+.end.lost h2 { color: var(--red); }
+.end-box p { color: #a59d8e; }
+.end-stats { text-align: left; max-width: 340px; margin: 1.4rem auto; }
+.end-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.4rem; }
+.unlock { border: 1px solid var(--blood); padding: 0.5rem; margin: 0.4rem auto; max-width: 340px; font-size: 0.85rem; }
+.unlock strong { font-family: var(--font-display); font-weight: 400; color: var(--red); }
+.end.won { background: radial-gradient(ellipse at center, rgba(207,198,178,0.12), rgba(0,0,0,0.92)); }
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; top: 4.6rem; z-index: 95;
+  transform: translate(-50%, -12px);
+  opacity: 0; visibility: hidden;
+  background: #0c0a09; border: 1px solid var(--blood);
+  padding: 0.6rem 1rem; font-size: 0.85rem;
+  transition: transform 0.4s cubic-bezier(.2,.8,.2,1), opacity 0.4s, visibility 0.4s;
+  pointer-events: none;
+}
+.toast.show { transform: translate(-50%, 0); opacity: 1; visibility: visible; }
+
+.noscript { position: fixed; inset: 0; display: grid; place-items: center; color: var(--dim); }
+
+/* ── Shakes ──────────────────────────────────────────────── */
+@keyframes shake {
+  20% { transform: translate(-4px, 2px); } 40% { transform: translate(4px, -2px); }
+  60% { transform: translate(-3px, -1px); } 80% { transform: translate(2px, 2px); }
+}
+@keyframes shake-big {
+  10% { transform: translate(-10px, 4px) rotate(-0.5deg); } 25% { transform: translate(9px, -6px) rotate(0.6deg); }
+  40% { transform: translate(-7px, 3px); } 60% { transform: translate(5px, -2px); } 80% { transform: translate(-2px, 1px); }
+}
+@keyframes shake-var {
+  0%   { transform: translate(calc(var(--shake) * -1), calc(var(--shake) * 0.5)); }
+  25%  { transform: translate(var(--shake), calc(var(--shake) * -0.7)) rotate(calc(var(--shake) * 0.05deg)); }
+  50%  { transform: translate(calc(var(--shake) * -0.6), calc(var(--shake) * -1)); }
+  75%  { transform: translate(calc(var(--shake) * 0.8), calc(var(--shake) * 0.4)) rotate(calc(var(--shake) * -0.05deg)); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes pulse { from { opacity: 0.45; } to { opacity: 1; } }
+@keyframes panic { from { transform: scale(1); } to { transform: scale(1.12); } }
+
+/* ── Reduced effects (setting) + OS preference ───────────── */
+body.reduced .enc-box.shaking,
+body.reduced .scene.shake,
+body.reduced .scene.shake-big,
+body.reduced .timer-num.panic,
+body.reduced .glitch::before,
+body.reduced .glitch::after { animation: none; }
+body.reduced .jumpscare { animation: none; background: #300; }
+body.reduced .jumpscare .face { animation: none; opacity: 0.85; height: 70vh; }
+body.reduced .scene.torch.flicker .darkness { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .glitch::before, .glitch::after, .enc-kind { animation: none; }
+}
+
+/* ── Small screens ───────────────────────────────────────── */
+@media (max-width: 860px) {
+  .stage { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .side { border-left: 0; border-top: 1px solid #141210; max-height: 32vh; }
+  .hud { grid-template-columns: auto 1fr; gap: 0.8rem; padding: 0.6rem 0.8rem; }
+  .hud-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .enc-options { grid-template-columns: 1fr; }
+  #room-name { font-size: 1.5rem; }
+  .hotspot { font-size: 0.75rem; padding: 0.35rem 0.6rem; }
+}
+
+/* ── Layering fixes: narrative + doors stay readable above the dark ── */
+.room-text { z-index: 7; }
+.exits { z-index: 7; }
+.scene.pitch .exit { opacity: 0.45; }
+.scene.pitch #room-desc { color: #6f675b; font-style: italic; }
+
+/* The figure that gets clearer every day you're caught */
+.watcher { opacity: calc(0.12 + var(--bloodiness) * 0.95); transition: opacity 3s; }
+
+/* HUD + sidebar sit above the vignette/blood so they stay legible */
+.hud, .side { z-index: 45; }
+.jumpscare .face { filter: grayscale(0.3) contrast(1.25); }
+
+
+/* ═════════════ Scene frame: art + hotspots share one 16:9 space ═════════════ */
+.scene { container-type: size; background: #000; }
+.frame {
+  position: absolute; left: 50%; top: 50%;
+  width: min(100cqw, 100cqh * 16 / 9);
+  height: min(100cqh, 100cqw * 9 / 16);
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  box-shadow: 0 0 120px 40px #000;
+}
+.room-art, .room-fx { position: absolute; inset: 0; }
+.room-art svg, .room-fx svg { width: 100%; height: 100%; display: block; }
+.room-fx { pointer-events: none; }
+.room-art { animation: room-in 0.9s ease-out; }
+@keyframes room-in { from { opacity: 0; filter: blur(6px) brightness(0.3); } }
+
+/* Hotspots: a pulsing ring on the object + a label */
+.hotspots { position: absolute; inset: 0; z-index: 4; }
+.hotspot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: none; border: 0; padding: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.hotspot .ring {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid rgba(240, 225, 200, 0.75);
+  box-shadow: 0 0 14px rgba(255, 200, 150, 0.45), inset 0 0 8px rgba(255, 200, 150, 0.3);
+  animation: ringpulse 2.6s ease-in-out infinite;
+}
+.hotspot .label {
+  background: rgba(4, 3, 3, 0.78);
+  border: 1px solid rgba(207, 198, 178, 0.22);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem; letter-spacing: 0.05em; white-space: nowrap;
+  opacity: 0.82;
+  transition: opacity 0.2s, border-color 0.2s, background 0.2s;
+}
+.hotspot .cost { color: var(--dim); font-size: 0.85em; margin-left: 0.5em; }
+.hotspot:hover .ring, .hotspot:focus-visible .ring { border-color: var(--red); box-shadow: 0 0 22px rgba(225, 29, 29, 0.8); animation-duration: 0.8s; }
+.hotspot:hover .label, .hotspot:focus-visible .label { opacity: 1; border-color: var(--red); background: rgba(40, 0, 0, 0.85); }
+.hotspot:focus-visible { outline: none; }
+.hotspot.used .ring { animation: none; border-color: rgba(150, 140, 120, 0.3); box-shadow: none; }
+.hotspot.used .label { opacity: 0.4; }
+@keyframes ringpulse { 0%, 100% { transform: scale(0.85); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
+
+/* ═════════════ Living rooms: animated fx layer ═════════════ */
+.fx-rain { animation: rain 0.55s linear infinite; }
+.fx-rain-2 { animation-duration: 0.8s; }
+@keyframes rain { from { transform: translate(0, 0); } to { transform: translate(-14px, 300px); } }
+
+.fx-lightning { opacity: 0; animation: lightning 13s infinite; }
+@keyframes lightning { 0%, 90% { opacity: 0; } 90.6% { opacity: 0.32; } 91.2% { opacity: 0; } 92% { opacity: 0.2; } 93% { opacity: 0; } }
+
+.fx-sway { transform-box: fill-box; transform-origin: 50% 0; animation: sway 5.5s ease-in-out infinite alternate; }
+@keyframes sway { from { transform: rotate(-1.2deg) skewX(-1deg); } to { transform: rotate(1.8deg) skewX(1.5deg); } }
+
+.fx-shadowpass { opacity: 0; animation: shadowpass 16s infinite; }
+@keyframes shadowpass { 0%, 78% { opacity: 0; } 81% { opacity: 0.95; } 86% { opacity: 0.95; } 90%, 100% { opacity: 0; } }
+
+.fx-mote { transform-box: fill-box; animation: mote 12s linear infinite; }
+@keyframes mote { 0% { opacity: 0; transform: translate(0, 0); } 20% { opacity: 0.55; } 80% { opacity: 0.4; } 100% { opacity: 0; transform: translate(38px, -90px); } }
+
+.fx-flicker { animation: bulb 7s infinite; }
+.fx-dim { opacity: 0; animation: dimroom 7s infinite; }
+@keyframes bulb {
+  0%, 40%, 42%, 69%, 73%, 76%, 100% { opacity: 0.9; }
+  41% { opacity: 0.15; } 70% { opacity: 0.05; } 71% { opacity: 0.7; } 72% { opacity: 0.1; } 74.5% { opacity: 0.2; }
+}
+@keyframes dimroom {
+  0%, 40%, 42%, 69%, 73%, 76%, 100% { opacity: 0; }
+  41% { opacity: 0.45; } 70% { opacity: 0.6; } 71% { opacity: 0.1; } 72% { opacity: 0.55; } 74.5% { opacity: 0.4; }
+}
+
+.fx-drip { animation: drip 2.6s ease-in infinite; }
+@keyframes drip { 0%, 30% { transform: translateY(0); opacity: 0; } 35% { opacity: 1; } 95% { transform: translateY(var(--fall, 150px)); opacity: 1; } 100% { transform: translateY(var(--fall, 150px)); opacity: 0; } }
+
+.fx-pulse { animation: ember 3.4s ease-in-out infinite alternate; }
+@keyframes ember { from { opacity: 0.45; } 60% { opacity: 0.9; } 70% { opacity: 0.65; } to { opacity: 1; } }
+
+.fx-pendulum { transform-box: view-box; transform-origin: 1300px 410px; animation: pendulum 1.6s ease-in-out infinite alternate; }
+@keyframes pendulum { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+
+.fx-underdoor { opacity: 0; animation: underdoor 15s linear infinite; }
+@keyframes underdoor { 0%, 70% { opacity: 0; transform: translateX(-60px); } 72% { opacity: 1; } 88% { opacity: 1; transform: translateX(210px); } 90%, 100% { opacity: 0; transform: translateX(210px); } }
+
+body.reduced .room-fx * { animation: none !important; }
+body.reduced .fx-lightning, body.reduced .fx-shadowpass, body.reduced .fx-underdoor, body.reduced .fx-dim { display: none; }
+
+/* ═════════════ Encounter: the view from your hiding spot ═════════════ */
+.encounter .enc-box { background: rgba(0, 0, 0, 0.55); padding: 1.6rem 1.8rem; box-shadow: 0 0 80px 40px rgba(0, 0, 0, 0.6); }
+.encounter[data-room="bedroom"] {     /* under the bed: the slats above, a strip of floor ahead */
+  background:
+    linear-gradient(#000 0 30%, rgba(0,0,0,0) 34%),
+    repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 150px, rgba(0,0,0,0.7) 150px 168px),
+    linear-gradient(rgba(0,0,0,0) 70%, #000 100%),
+    radial-gradient(ellipse 70% 25% at 50% 72%, rgba(150,170,215,0.22), rgba(0,0,0,0.96) 100%);
+}
+.encounter[data-room="hallway"],
+.encounter[data-room="foyer"] {        /* inside a closet: light through the louvres */
+  background:
+    radial-gradient(ellipse 45% 60% at 50% 50%, rgba(0,0,0,0) 0%, #000 100%),
+    repeating-linear-gradient(180deg, #000 0 26px, rgba(255,160,80,0.16) 26px 31px, #000 31px 34px);
+}
+.encounter[data-room="kitchen"] {     /* behind the pantry door: one sliver of sick light */
+  background:
+    linear-gradient(90deg, #000 0 46%, rgba(190,235,150,0.18) 49%, rgba(230,255,200,0.3) 50%, rgba(190,235,150,0.18) 51%, #000 54%),
+    #000;
+}
+.encounter[data-room="basement"] {    /* behind the boiler */
+  background: radial-gradient(circle at 88% 62%, rgba(255,90,20,0.32), rgba(0,0,0,0.97) 55%);
+}
+
+/* ═════════════ Title art ═════════════ */
+.title-art { position: absolute; inset: 0; z-index: 0; }
+.title-art svg { width: 100%; height: 100%; display: block; }
+.title-wrap {
+  position: relative; z-index: 1;
+  padding: 2.2rem 2.6rem;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0) 75%);
+}
+.t-window, .t-window-glow { animation: bulb 9s infinite; }
+.fx-fog { animation: fog 26s ease-in-out infinite alternate; }
+.fx-fog-2 { animation-duration: 34s; animation-direction: alternate-reverse; }
+.fx-cloud { animation: fog 60s ease-in-out infinite alternate; }
+@keyframes fog { from { transform: translateX(-80px); } to { transform: translateX(90px); } }
+body.reduced .title-art * { animation: none !important; }
+.enc-box:focus { outline: none; }
+
+@media (min-width: 1000px) { .title-wrap { margin-left: 6vw; text-align: left; } .title-wrap .menu { align-items: flex-start; } .tagline { margin-left: 0; } }
+/* touch / small screens: the rings stay on the objects, actions move into the bottom bar */
+.exit.action { display: none; }
+@media (max-width: 860px) {
+  .hotspot .label { display: none; }
+  .exit.action { display: inline-block; border-color: #3a1a14; }
+  .exit.action::before { content: '◦ '; color: var(--red); }
+  .exit.action.used { opacity: 0.4; }
+}
+
+</style>
+</head>
+<body data-day="1" data-phase="title">
+  <canvas id="static" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="blood" aria-hidden="true"></div>
+
+  <!-- ═════════════ TITLE ═════════════ -->
+  <section id="screen-title" class="screen active" aria-labelledby="game-title">
+    <div class="title-art" id="title-art" aria-hidden="true"></div>
+    <div class="title-wrap">
+      <p class="kicker">a horror trivia stealth game</p>
+      <h1 id="game-title" class="glitch" data-text="DON'T MAKE A SOUND">DON'T MAKE A SOUND</h1>
+      <p class="tagline">Five days. One locked house. It hunts by sound —<br />and only what you know about horror will keep you hidden.</p>
+      <nav class="menu">
+        <button class="btn btn-primary" id="btn-start">Enter the house</button>
+        <button class="btn" data-open="panel-howto">How to survive</button>
+        <button class="btn" data-open="panel-achievements">Achievements</button>
+        <button class="btn" data-open="panel-settings">Settings</button>
+      </nav>
+      <p class="best" id="title-best"></p>
+      <p class="warning">🎧 Headphones recommended. Contains jump scares, loud sounds and flashing images —<br />turn on <strong>Reduced effects</strong> in Settings if you need to.</p>
+    </div>
+  </section>
+
+  <!-- ═════════════ GAME ═════════════ -->
+  <section id="screen-game" class="screen" aria-label="The house">
+    <header class="hud">
+      <div class="hud-day" aria-live="polite">
+        <span class="hud-label">Day</span>
+        <span id="day-num">1</span><span class="of">/ 5</span>
+      </div>
+      <div class="hud-noise">
+        <div class="hud-label">Noise <span id="noise-val">0%</span></div>
+        <div class="meter" role="meter" aria-label="Noise level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="noise-meter">
+          <div class="meter-fill" id="noise-fill"></div>
+          <div class="meter-tick" style="left:50%"></div>
+          <div class="meter-tick" style="left:75%"></div>
+        </div>
+      </div>
+      <div class="hud-actions">
+        <button class="btn btn-small" id="btn-flashlight" disabled title="Flashlight (F)">Flashlight <kbd>F</kbd></button>
+        <button class="btn btn-small" id="btn-mute" title="Mute (M)">Sound <kbd>M</kbd></button>
+        <button class="btn btn-small" id="btn-quit" title="Back to title">Quit</button>
+      </div>
+    </header>
+
+    <div class="stage">
+      <main class="scene" id="scene" data-room="bedroom">
+        <div class="frame" id="frame">
+          <div class="room-art" id="room-art" aria-hidden="true"></div>
+          <div class="room-fx" id="room-fx" aria-hidden="true"></div>
+          <div class="hotspots" id="hotspots"></div>
+        </div>
+        <div class="room-text">
+          <h2 id="room-name">Bedroom</h2>
+          <p id="room-desc"></p>
+        </div>
+        <nav class="exits" id="exits" aria-label="Doors"></nav>
+        <div class="darkness" id="darkness" aria-hidden="true"></div>
+      </main>
+
+      <aside class="side">
+        <h3>Pockets</h3>
+        <ul class="inventory" id="inventory"></ul>
+        <h3>Journal</h3>
+        <ol class="log" id="log" aria-live="polite"></ol>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ═════════════ ENCOUNTER (pursuit / lockpick / standoff) ═════════════ -->
+  <div class="overlay encounter" id="encounter" hidden role="dialog" aria-modal="true" aria-labelledby="enc-title">
+    <div class="enc-box" id="enc-box">
+      <p class="enc-kind" id="enc-title"></p>
+      <p class="enc-intro" id="enc-intro"></p>
+      <div class="enc-body" id="enc-body" hidden>
+        <div class="enc-progress" id="enc-progress"></div>
+        <div class="timer"><div class="timer-fill" id="timer-fill"></div></div>
+        <div class="timer-num" id="timer-num">10</div>
+        <h2 class="enc-question" id="enc-question"></h2>
+        <div class="enc-options" id="enc-options"></div>
+        <p class="enc-hint">Press <kbd>1</kbd>–<kbd>4</kbd> to answer</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════ JUMP SCARE ═════════════ -->
+  <div class="jumpscare" id="jumpscare" hidden aria-hidden="true">
+    <svg viewBox="0 0 400 500" class="face" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <filter id="warp" x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="13" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="22" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" />
+          <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0" />
+          <feComposite in2="SourceGraphic" operator="in" />
+        </filter>
+        <radialGradient id="skin" cx="50%" cy="34%" r="66%">
+          <stop offset="0%" stop-color="#ebe7dc" />
+          <stop offset="45%" stop-color="#a49e93" />
+          <stop offset="78%" stop-color="#3a3632" />
+          <stop offset="100%" stop-color="#000" />
+        </radialGradient>
+        <radialGradient id="socket">
+          <stop offset="45%" stop-color="#000" />
+          <stop offset="100%" stop-color="#000" stop-opacity="0" />
+        </radialGradient>
+        <linearGradient id="maw" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1a0000" />
+          <stop offset="0.4" stop-color="#000" />
+        </linearGradient>
+      </defs>
+      <g filter="url(#warp)">
+        <path id="head" d="M200 8 C305 14 345 115 338 232 C330 345 282 470 200 496 C118 470 70 345 62 232 C55 115 95 14 200 8Z" fill="url(#skin)" />
+        <ellipse cx="112" cy="330" rx="40" ry="70" fill="#000" opacity="0.35" />
+        <ellipse cx="290" cy="330" rx="40" ry="70" fill="#000" opacity="0.35" />
+        <ellipse cx="128" cy="212" rx="78" ry="88" fill="url(#socket)" />
+        <ellipse cx="276" cy="200" rx="72" ry="94" fill="url(#socket)" />
+        <ellipse cx="130" cy="216" rx="34" ry="48" fill="#000" />
+        <ellipse cx="274" cy="204" rx="30" ry="54" fill="#000" />
+        <circle cx="137" cy="222" r="4" fill="#fff" />
+        <circle cx="268" cy="214" r="3" fill="#fff" />
+        <path d="M122 262 C118 300 128 340 120 400" stroke="#000" stroke-width="7" fill="none" opacity="0.8" />
+        <path d="M282 256 C290 300 276 350 286 420" stroke="#000" stroke-width="5" fill="none" opacity="0.7" />
+        <path d="M192 268 l-8 34 l10 -4z M210 268 l8 34 l-10 -4z" fill="#000" opacity="0.85" />
+        <path d="M146 336 Q200 318 256 334 Q266 440 200 492 Q134 440 146 336Z" fill="url(#maw)" />
+        <path d="M156 338 l6 18 l5 -19 l8 24 l4 -26 l9 21 l6 -22 l7 27 l5 -25 l9 19 l6 -21 l8 16 l5 -14" fill="#d9d2c0" opacity="0.9" />
+      </g>
+      <use href="#head" filter="url(#grain)" />
+    </svg>
+  </div>
+
+  <!-- ═════════════ DAY TRANSITION ═════════════ -->
+  <div class="overlay wake" id="wake" hidden role="dialog" aria-modal="true" aria-labelledby="wake-day">
+    <div class="wake-box">
+      <h2 id="wake-day">DAY 2</h2>
+      <p id="wake-text"></p>
+      <button class="btn btn-primary" id="btn-wake">Open your eyes</button>
+    </div>
+  </div>
+
+  <!-- ═════════════ END SCREEN ═════════════ -->
+  <div class="overlay end" id="end" hidden role="dialog" aria-modal="true" aria-labelledby="end-title">
+    <div class="end-box">
+      <h2 id="end-title" class="glitch" data-text=""></h2>
+      <p id="end-text"></p>
+      <dl class="end-stats" id="end-stats"></dl>
+      <div id="end-unlocks"></div>
+      <div class="end-actions">
+        <button class="btn btn-primary" id="btn-again">Try again</button>
+        <button class="btn" id="btn-title">Title screen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════ PANELS ═════════════ -->
+  <div class="overlay panel" id="panel-howto" hidden role="dialog" aria-modal="true" aria-labelledby="howto-h">
+    <div class="panel-box">
+      <h2 id="howto-h">How to survive</h2>
+      <ul class="howto">
+        <li><strong>Find three things:</strong> the <em>Basement Key</em>, the <em>Bolt Cutters</em> and the <em>Master Key</em>. Then reach the front door.</li>
+        <li><strong>Every action makes noise.</strong> Walking +10%, the creaky hallway +5% more, searching +25%, the hammer +50%.</li>
+        <li><strong>At 100% noise it comes for you.</strong> You hide, and must answer 1–3 horror trivia questions before the timer runs out.</li>
+        <li><strong>Survive</strong> and it walks away (noise drops to 20%). <strong>Fail</strong> and you wake up the next day in the bedroom.</li>
+        <li><strong>Get caught on Day 5</strong> and you never leave.</li>
+        <li><strong>Hide under the bed</strong> to calm the house (−30% noise, once per visit).</li>
+        <li><strong>The basement is dark.</strong> Use the flashlight (<kbd>F</kbd>) — but light spilling under doors makes walking a little louder.</li>
+      </ul>
+      <button class="btn" data-close>Got it</button>
+    </div>
+  </div>
+
+  <div class="overlay panel" id="panel-achievements" hidden role="dialog" aria-modal="true" aria-labelledby="ach-h">
+    <div class="panel-box">
+      <h2 id="ach-h">Achievements</h2>
+      <dl class="stats" id="stats-list"></dl>
+      <ul class="achievements" id="ach-list"></ul>
+      <button class="btn" data-close>Close</button>
+    </div>
+  </div>
+
+  <div class="overlay panel" id="panel-settings" hidden role="dialog" aria-modal="true" aria-labelledby="set-h">
+    <div class="panel-box">
+      <h2 id="set-h">Settings</h2>
+      <fieldset class="setting">
+        <legend>Difficulty</legend>
+        <label><input type="radio" name="difficulty" value="easy" /> Easy — 15s per question, quieter footsteps</label>
+        <label><input type="radio" name="difficulty" value="normal" /> Normal — 10s per question</label>
+        <label><input type="radio" name="difficulty" value="nightmare" /> Nightmare — 7s, harder questions, louder everything</label>
+      </fieldset>
+      <label class="setting">Volume
+        <input type="range" id="set-volume" min="0" max="1" step="0.05" />
+      </label>
+      <label class="setting check"><input type="checkbox" id="set-reduced" /> Reduced effects (no screen shake, no flashing, softer jump scares)</label>
+      <div class="setting-actions">
+        <button class="btn btn-danger" id="btn-reset">Reset progress</button>
+        <button class="btn" data-close>Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <noscript><p class="noscript">This game needs JavaScript. The house is very quiet without it.</p></noscript>
+  <script>
+(() => {
+'use strict';
+const __m = {};
+window.__QUESTIONS__ = {"version":1,"notes":"answer = index of the correct option. Options are shuffled at runtime, so the correct one can always be listed first.","questions":[{"id":"sl-001","difficulty":"easy","tags":["slasher"],"question":"What is the name of the masked killer in Halloween (1978)?","options":["Michael Myers","Jason Voorhees","Freddy Krueger","Billy Loomis"],"answer":0},{"id":"sl-002","difficulty":"easy","tags":["slasher"],"question":"Where does Freddy Krueger attack his victims?","options":["In their dreams","In a summer camp lake","Through cursed videotapes","Inside a motel shower"],"answer":0},{"id":"sl-003","difficulty":"easy","tags":["slasher"],"question":"Which summer camp is the setting of Friday the 13th (1980)?","options":["Camp Crystal Lake","Camp Arawak","Camp Blackfoot","Camp Redwood"],"answer":0},{"id":"sl-004","difficulty":"easy","tags":["slasher"],"question":"In Scream (1996), what question does Ghostface famously ask over the phone?","options":["What's your favorite scary movie?","Do you want to play a game?","Have you checked the children?","Are you alone in the house?"],"answer":0},{"id":"sl-005","difficulty":"easy","tags":["slasher"],"question":"Leatherface is the killer in which film?","options":["The Texas Chain Saw Massacre","The Hills Have Eyes","House of 1000 Corpses","Wrong Turn"],"answer":0},{"id":"sl-006","difficulty":"easy","tags":["slasher"],"question":"What is the name of the killer doll in Child's Play (1988)?","options":["Chucky","Annabelle","Billy","Brahms"],"answer":0},{"id":"sl-007","difficulty":"easy","tags":["slasher"],"question":"Freddy Krueger haunts the kids of which street?","options":["Elm Street","Maple Street","Oak Street","Haddonfield Avenue"],"answer":0},{"id":"sl-008","difficulty":"easy","tags":["slasher"],"question":"Which motel does Norman Bates run in Psycho (1960)?","options":["Bates Motel","The Overlook","Motel Hell","The Lighthouse Inn"],"answer":0},{"id":"sl-009","difficulty":"easy","tags":["slasher"],"question":"In the Saw films, what nickname is given to the killer John Kramer?","options":["Jigsaw","The Puppeteer","The Collector","Ghostface"],"answer":0},{"id":"sl-010","difficulty":"medium","tags":["slasher"],"question":"Who is the killer in the original Friday the 13th (1980)?","options":["Pamela Voorhees","Jason Voorhees","Alice Hardy","Crazy Ralph"],"answer":0},{"id":"sl-011","difficulty":"medium","tags":["slasher"],"question":"Who directed Halloween (1978)?","options":["John Carpenter","Wes Craven","Tobe Hooper","Sean S. Cunningham"],"answer":0},{"id":"sl-012","difficulty":"medium","tags":["slasher"],"question":"In which fictional town is Scream (1996) set?","options":["Woodsboro","Haddonfield","Springwood","Derry"],"answer":0},{"id":"sl-013","difficulty":"medium","tags":["slasher"],"question":"Which actress plays Laurie Strode in Halloween (1978)?","options":["Jamie Lee Curtis","Neve Campbell","Heather Langenkamp","Adrienne King"],"answer":0},{"id":"sl-014","difficulty":"medium","tags":["slasher"],"question":"A Nightmare on Elm Street (1984) was the film debut of which actor?","options":["Johnny Depp","Kevin Bacon","Brad Pitt","Keanu Reeves"],"answer":0},{"id":"sl-015","difficulty":"medium","tags":["slasher","supernatural"],"question":"How many times must you say Candyman's name into a mirror to summon him?","options":["Five","Three","Seven","Thirteen"],"answer":0},{"id":"sl-016","difficulty":"medium","tags":["slasher"],"question":"Who are revealed as the killers in Scream (1996)?","options":["Billy Loomis and Stu Macher","Randy Meeks and Dewey Riley","Mickey Altieri and Mrs. Loomis","Roman Bridger and Stu Macher"],"answer":0},{"id":"sl-017","difficulty":"medium","tags":["slasher"],"question":"What is the name of the puppet on a tricycle in the Saw films?","options":["Billy","Slappy","Fats","Robert"],"answer":0},{"id":"sl-018","difficulty":"hard","tags":["slasher"],"question":"In which film does Jason Voorhees first wear his hockey mask?","options":["Friday the 13th Part III (1982)","Friday the 13th (1980)","Friday the 13th Part 2 (1981)","Friday the 13th: The Final Chapter (1984)"],"answer":0},{"id":"sl-019","difficulty":"hard","tags":["slasher"],"question":"Michael Myers' mask in Halloween (1978) was a modified mask of which character?","options":["Captain Kirk","Emmett Kelly the clown","Spock","The Lone Ranger"],"answer":0},{"id":"sl-020","difficulty":"hard","tags":["slasher"],"question":"Who composed the shrieking-strings score for Psycho (1960)?","options":["Bernard Herrmann","John Williams","Jerry Goldsmith","Ennio Morricone"],"answer":0},{"id":"sl-021","difficulty":"hard","tags":["slasher"],"question":"Who directed The Texas Chain Saw Massacre (1974)?","options":["Tobe Hooper","Wes Craven","George A. Romero","Bob Clark"],"answer":0},{"id":"sl-022","difficulty":"hard","tags":["slasher"],"question":"Who directed the early slasher Black Christmas (1974)?","options":["Bob Clark","John Carpenter","Brian De Palma","Dario Argento"],"answer":0},{"id":"sl-023","difficulty":"medium","tags":["slasher"],"question":"Who directed A Nightmare on Elm Street (1984)?","options":["Wes Craven","John Carpenter","Sam Raimi","Clive Barker"],"answer":0},{"id":"sn-001","difficulty":"easy","tags":["supernatural"],"question":"What is the name of the hotel in The Shining (1980)?","options":["The Overlook Hotel","The Cecil Hotel","The Stanley Grand","The Bramford"],"answer":0},{"id":"sn-002","difficulty":"easy","tags":["supernatural"],"question":"Which film features the line \"Here's Johnny!\"?","options":["The Shining","The Exorcist","Misery","Poltergeist"],"answer":0},{"id":"sn-003","difficulty":"easy","tags":["supernatural"],"question":"In The Ring (2002), how long do you have to live after watching the cursed tape?","options":["Seven days","Three days","Twenty-four hours","Thirteen days"],"answer":0},{"id":"sn-004","difficulty":"easy","tags":["supernatural"],"question":"Which real-life paranormal investigators are the heroes of The Conjuring?","options":["Ed and Lorraine Warren","Elise Rainier and Specs","Peter and Ray Stantz","Zak and Nick Bagans"],"answer":0},{"id":"sn-005","difficulty":"easy","tags":["supernatural"],"question":"In The Conjuring universe, what is Annabelle?","options":["A possessed doll","A haunted music box","A demonic nun","A cursed mirror"],"answer":0},{"id":"sn-006","difficulty":"easy","tags":["supernatural"],"question":"Which film features a little girl announcing \"They're here\" to a TV set?","options":["Poltergeist","The Ring","Insidious","The Others"],"answer":0},{"id":"sn-007","difficulty":"easy","tags":["supernatural"],"question":"Which film features the line \"I see dead people\"?","options":["The Sixth Sense","The Others","Ghost","The Frighteners"],"answer":0},{"id":"sn-008","difficulty":"easy","tags":["supernatural"],"question":"Who directed Get Out (2017)?","options":["Jordan Peele","Ari Aster","Robert Eggers","James Wan"],"answer":0},{"id":"sn-009","difficulty":"easy","tags":["creature"],"question":"In A Quiet Place (2018), how do the creatures hunt?","options":["By sound","By smell","By body heat","By light"],"answer":0},{"id":"sn-010","difficulty":"easy","tags":["supernatural"],"question":"In which country is Midsommar (2019) mostly set?","options":["Sweden","Norway","Iceland","Finland"],"answer":0},{"id":"sn-011","difficulty":"medium","tags":["supernatural"],"question":"What is the name of the possessed girl in The Exorcist (1973)?","options":["Regan MacNeil","Carrie White","Samara Morgan","Damien Thorn"],"answer":0},{"id":"sn-012","difficulty":"medium","tags":["supernatural"],"question":"In Stanley Kubrick's The Shining, which room should Danny never enter?","options":["Room 237","Room 217","Room 1408","Room 666"],"answer":0},{"id":"sn-013","difficulty":"medium","tags":["supernatural"],"question":"In Stephen King's It, Pennywise terrorizes which town?","options":["Derry, Maine","Castle Rock, Maine","Haddonfield, Illinois","Woodsboro, California"],"answer":0},{"id":"sn-014","difficulty":"medium","tags":["supernatural"],"question":"Who directed Hereditary (2018)?","options":["Ari Aster","Robert Eggers","Mike Flanagan","Jordan Peele"],"answer":0},{"id":"sn-015","difficulty":"medium","tags":["supernatural"],"question":"Which actor plays Ash Williams in the Evil Dead films?","options":["Bruce Campbell","Robert Englund","Kane Hodder","Jeffrey Combs"],"answer":0},{"id":"sn-016","difficulty":"medium","tags":["supernatural"],"question":"In Get Out, what is the void Chris falls into under hypnosis called?","options":["The Sunken Place","The Further","The Upside Down","The Black Lodge"],"answer":0},{"id":"sn-017","difficulty":"medium","tags":["supernatural"],"question":"The Blair Witch Project (1999) is set in the woods of which U.S. state?","options":["Maryland","Maine","Oregon","Vermont"],"answer":0},{"id":"sn-018","difficulty":"medium","tags":["supernatural"],"question":"Who stars as Grace in The Others (2001)?","options":["Nicole Kidman","Naomi Watts","Toni Collette","Vera Farmiga"],"answer":0},{"id":"sn-019","difficulty":"medium","tags":["supernatural"],"question":"What is the vampire's name in Nosferatu (1922)?","options":["Count Orlok","Count Dracula","Count Yorga","Lord Ruthven"],"answer":0},{"id":"sn-020","difficulty":"medium","tags":["supernatural"],"question":"In the Insidious films, what is the spirit realm called?","options":["The Further","The Sunken Place","The Void","The Other Side"],"answer":0},{"id":"sn-021","difficulty":"medium","tags":["supernatural"],"question":"In The Witch (2015), what is the name of the family's sinister goat?","options":["Black Phillip","Old Scratch","Brother Thomas","Black Shuck"],"answer":0},{"id":"sn-022","difficulty":"medium","tags":["supernatural"],"question":"Rosemary's Baby (1968) is set in which city?","options":["New York City","Boston","Chicago","London"],"answer":0},{"id":"sn-023","difficulty":"hard","tags":["supernatural"],"question":"Which actor plays Father Merrin in The Exorcist (1973)?","options":["Max von Sydow","Jason Miller","Lee J. Cobb","Christopher Lee"],"answer":0},{"id":"sn-024","difficulty":"hard","tags":["supernatural"],"question":"Who wrote and directed The Babadook (2014)?","options":["Jennifer Kent","Karyn Kusama","Julia Ducournau","Natalie Erika James"],"answer":0},{"id":"sn-025","difficulty":"hard","tags":["supernatural"],"question":"Who directed the original Paranormal Activity (2007)?","options":["Oren Peli","James Wan","Leigh Whannell","Scott Derrickson"],"answer":0},{"id":"sn-026","difficulty":"hard","tags":["supernatural"],"question":"What is the name of the puzzle box in Hellraiser (1987)?","options":["The Lament Configuration","The Lazarus Cube","The Leviathan Key","The Cenobite Engine"],"answer":0},{"id":"sn-027","difficulty":"hard","tags":["supernatural"],"question":"In Sinister (2012), what is the pagan entity known as?","options":["Bughuul","Pazuzu","Valak","Paimon"],"answer":0},{"id":"sn-028","difficulty":"hard","tags":["supernatural"],"question":"In Hereditary, which demon king is the cult trying to summon?","options":["Paimon","Pazuzu","Baphomet","Valak"],"answer":0},{"id":"cr-001","difficulty":"easy","tags":["creature"],"question":"In which shopping location do survivors hole up in Dawn of the Dead (1978)?","options":["A shopping mall","A supermarket","A department store warehouse","An airport terminal"],"answer":0},{"id":"cr-002","difficulty":"easy","tags":["creature"],"question":"Who directed Night of the Living Dead (1968)?","options":["George A. Romero","John Carpenter","Lucio Fulci","Tobe Hooper"],"answer":0},{"id":"cr-003","difficulty":"easy","tags":["creature"],"question":"Where is John Carpenter's The Thing (1982) set?","options":["Antarctica","The Arctic Circle","Siberia","Alaska"],"answer":0},{"id":"cr-004","difficulty":"medium","tags":["creature"],"question":"What is the name of the spaceship in Alien (1979)?","options":["Nostromo","Sulaco","Prometheus","Covenant"],"answer":0},{"id":"cr-005","difficulty":"medium","tags":["creature"],"question":"Who directed 28 Days Later (2002)?","options":["Danny Boyle","Edgar Wright","Zack Snyder","Neil Marshall"],"answer":0},{"id":"cr-006","difficulty":"medium","tags":["creature"],"question":"Who directed A Quiet Place (2018) and also stars in it?","options":["John Krasinski","Jordan Peele","Bradley Cooper","Jason Blum"],"answer":0},{"id":"cr-007","difficulty":"medium","tags":["slasher"],"question":"What disaster opens the first Final Destination (2000)?","options":["A plane explosion","A highway pile-up","A rollercoaster derailment","A bridge collapse"],"answer":0},{"id":"cr-008","difficulty":"easy","tags":["supernatural"],"question":"At the prom in Carrie (1976), what is dumped on Carrie?","options":["Pig's blood","Red paint","Punch","Motor oil"],"answer":0},{"id":"hg-001","difficulty":"easy","tags":["horror-games"],"question":"In Five Nights at Freddy's, what is the name of the restaurant you guard?","options":["Freddy Fazbear's Pizza","Chuck E.'s Pizzeria","Fredbear's Family Diner","Circus Baby's Pizza World"],"answer":0},{"id":"hg-002","difficulty":"easy","tags":["horror-games"],"question":"In Granny, how many days do you have to escape the house?","options":["Five","Three","Seven","Ten"],"answer":0},{"id":"hg-003","difficulty":"easy","tags":["horror-games"],"question":"What weapon sits on the table in Buckshot Roulette?","options":["A shotgun","A revolver","A crossbow","A hunting rifle"],"answer":0},{"id":"hg-004","difficulty":"easy","tags":["horror-games"],"question":"In Resident Evil, which corporation is behind the T-virus?","options":["Umbrella Corporation","Weyland-Yutani","Abstergo","Aperture Science"],"answer":0},{"id":"hg-005","difficulty":"easy","tags":["horror-games"],"question":"Which blue, long-armed toy is the first big threat in Poppy Playtime?","options":["Huggy Wuggy","Kissy Missy","Mommy Long Legs","Boxy Boo"],"answer":0},{"id":"hg-006","difficulty":"easy","tags":["horror-games"],"question":"How many pages must you collect in Slender: The Eight Pages?","options":["Eight","Six","Ten","Twelve"],"answer":0},{"id":"hg-007","difficulty":"easy","tags":["horror-games"],"question":"In Phasmophobia, what is your team's main goal?","options":["Identify the ghost type","Banish the ghost with salt","Escape before sunrise","Find the cursed object and burn it"],"answer":0},{"id":"hg-008","difficulty":"easy","tags":["horror-games"],"question":"Which rookie cop is a playable lead in Resident Evil 2?","options":["Leon S. Kennedy","Chris Redfield","Barry Burton","Albert Wesker"],"answer":0},{"id":"hg-009","difficulty":"medium","tags":["horror-games"],"question":"What is the name of the night guard in the first Five Nights at Freddy's?","options":["Mike Schmidt","Jeremy Fitzgerald","Vanessa Shelly","William Afton"],"answer":0},{"id":"hg-010","difficulty":"medium","tags":["horror-games"],"question":"Who created Five Nights at Freddy's?","options":["Scott Cawthon","Dani Moonstar","Mike Klubnika","Toby Fox"],"answer":0},{"id":"hg-011","difficulty":"medium","tags":["horror-games"],"question":"In the original Resident Evil, where are S.T.A.R.S. members trapped?","options":["The Spencer Mansion","The Baker Estate","Raccoon City Hospital","Castle Dimitrescu"],"answer":0},{"id":"hg-012","difficulty":"medium","tags":["horror-games"],"question":"Who is the protagonist of Silent Hill 2?","options":["James Sunderland","Harry Mason","Henry Townshend","Heather Mason"],"answer":0},{"id":"hg-013","difficulty":"medium","tags":["horror-games"],"question":"In which asylum is Outlast (2013) set?","options":["Mount Massive Asylum","Arkham Asylum","Lakeview Asylum","Brookhaven Hospital"],"answer":0},{"id":"hg-014","difficulty":"medium","tags":["horror-games"],"question":"The playable teaser P.T. was for which cancelled game?","options":["Silent Hills","Silent Hill: Origins","Allison Road","Death Stranding"],"answer":0},{"id":"hg-015","difficulty":"medium","tags":["horror-games"],"question":"Who is the protagonist of Alien: Isolation?","options":["Amanda Ripley","Ellen Ripley","Jonesy Lambert","Ellie Williams"],"answer":0},{"id":"hg-016","difficulty":"medium","tags":["horror-games"],"question":"Which family torments Ethan Winters in Resident Evil 7?","options":["The Bakers","The Dimitrescus","The Sawyers","The Ashfords"],"answer":0},{"id":"hg-017","difficulty":"medium","tags":["horror-games"],"question":"What is the name of the hungry child protagonist of Little Nightmares?","options":["Six","Mono","Seven","Nine"],"answer":0},{"id":"hg-018","difficulty":"medium","tags":["horror-games"],"question":"In Fatal Frame, what do you use to fight ghosts?","options":["The Camera Obscura","A spirit lantern","A holy shotgun","A radio tuned to static"],"answer":0},{"id":"hg-019","difficulty":"medium","tags":["horror-games"],"question":"Which hulking, helmeted figure stalks the player in Silent Hill 2?","options":["Pyramid Head","Valtiel","The Butcher","Nemesis"],"answer":0},{"id":"hg-020","difficulty":"medium","tags":["horror-games"],"question":"Who is the engineer protagonist of Dead Space (2008)?","options":["Isaac Clarke","Gordon Freeman","Alan Wake","Daniel Garner"],"answer":0},{"id":"hg-021","difficulty":"hard","tags":["horror-games"],"question":"In Amnesia: The Dark Descent, which castle does Daniel explore?","options":["Brennenburg Castle","Castle Dimitrescu","Castle Wolfenstein","Castle Lecarde"],"answer":0},{"id":"hg-022","difficulty":"hard","tags":["horror-games"],"question":"What is the name of the mining ship in Dead Space (2008)?","options":["USG Ishimura","USG Kellion","USM Sulaco","SS Von Braun"],"answer":0},{"id":"hg-023","difficulty":"hard","tags":["horror-games"],"question":"Who developed Buckshot Roulette?","options":["Mike Klubnika","Scott Cawthon","DVloper","Puppet Combo"],"answer":0},{"id":"hg-024","difficulty":"hard","tags":["horror-games"],"question":"On which mountain is Until Dawn (2015) set?","options":["Blackwood Mountain","Mount Massive","Raven's Peak","Mount Hollow"],"answer":0},{"id":"hg-025","difficulty":"hard","tags":["horror-games"],"question":"In Bendy and the Ink Machine, what is the name of the animation studio?","options":["Joey Drew Studios","Playtime Co.","Fazbear Entertainment","Gabbro Animation"],"answer":0},{"id":"hg-026","difficulty":"hard","tags":["horror-games"],"question":"Resident Evil 7's Baker farmhouse is located in which U.S. state?","options":["Louisiana","Texas","Georgia","Mississippi"],"answer":0},{"id":"hg-027","difficulty":"hard","tags":["horror-games"],"question":"Who created the mobile horror game Granny?","options":["DVloper","Scott Cawthon","Mob Entertainment","Red Barrels"],"answer":0}]};
+/* ── config.js ── */
+__m.config = (() => {
+// ─────────────────────────────────────────────────────────────
+//  Don't Make a Sound — static game data
+//  Everything tweakable lives here: noise costs, rooms, items.
+// ─────────────────────────────────────────────────────────────
+
+const MAX_DAYS = 5;
+const START_ROOM = 'bedroom';
+
+const NOISE = {
+  move: 10,          // walking between rooms
+  creakyBonus: 5,    // extra when stepping onto the hallway floorboards
+  search: 25,        // rummaging drawers / cupboards
+  loudTool: 50,      // swinging the hammer
+  lockpickFail: 25,  // fumbling the kitchen lock
+  flashlightMove: 5, // light spilling under doors while you walk
+  fumbleDark: 15,    // knocking things over in the dark basement
+  hideRelief: -30,   // holding your breath under the bed
+  afterEscape: 20,   // noise level after surviving a Pursuit Event
+  max: 100,
+};
+
+const DIFFICULTY = {
+  easy:      { label: 'Easy',      seconds: 15, noiseMult: 0.8, weights: { easy: 6, medium: 3, hard: 1 } },
+  normal:    { label: 'Normal',    seconds: 10, noiseMult: 1.0, weights: { easy: 4, medium: 4, hard: 2 } },
+  nightmare: { label: 'Nightmare', seconds: 7,  noiseMult: 1.25, weights: { easy: 2, medium: 4, hard: 4 } },
+};
+
+const ITEMS = {
+  flashlight:  { name: 'Flashlight',   desc: 'Weak beam. Toggle with F.' },
+  hammer:      { name: 'Claw Hammer',  desc: 'Heavy. Loud. Effective.' },
+  basementKey: { name: 'Basement Key', desc: 'Rusted. Smells like damp earth.' },
+  boltCutters: { name: 'Bolt Cutters', desc: 'Enough to bite through a chain.' },
+  masterKey:   { name: 'Master Key',   desc: 'Brass. Fits the front deadbolt.' },
+};
+
+// danger = number of trivia questions asked during a Pursuit Event in that room
+const ROOMS = {
+  bedroom: {
+    name: 'Bedroom',
+    danger: 1,
+    exits: ['hallway'],
+    hideSpot: 'under the bed',
+    desc: 'The room you woke up in. Peeling floral wallpaper. The bed frame is low enough to slide under.',
+    hotspots: ['nightstand', 'note', 'bed'],
+  },
+  hallway: {
+    name: 'Hallway',
+    danger: 2,
+    exits: ['bedroom', 'kitchen', 'basement', 'foyer'],
+    creaky: true,
+    hideSpot: 'inside the linen closet',
+    desc: 'A long corridor with every door hanging open a crack. The floorboards groan under your weight.',
+    hotspots: ['linenCloset', 'portrait'],
+  },
+  kitchen: {
+    name: 'Kitchen',
+    danger: 2,
+    exits: ['hallway'],
+    hideSpot: 'behind the pantry door',
+    desc: 'A dripping tap. Something rotting in the sink. One drawer has a brass lock on it.',
+    hotspots: ['cupboards', 'lockedDrawer', 'fridge'],
+  },
+  basement: {
+    name: 'Basement',
+    danger: 3,
+    exits: ['hallway'],
+    requires: 'basementKey',
+    dark: true,
+    hideSpot: 'behind the boiler',
+    desc: 'Concrete, cold, and wet. The boiler ticks. You are not alone down here — you are never alone down here.',
+    darkDesc: 'Pitch black. Water drips somewhere close. You can’t see your own hands.',
+    hotspots: ['workbench', 'toolbox'],
+  },
+  foyer: {
+    name: 'Front Foyer',
+    danger: 3,
+    exits: ['hallway'],
+    hideSpot: 'in the coat closet',
+    desc: 'The front door. Freedom is two locks away: a heavy chain and a brass deadbolt.',
+    hotspots: ['frontDoor'],
+  },
+};
+
+// type: search | read | hide | lockpick | smash | exit
+const HOTSPOTS = {
+  nightstand: {
+    label: 'Nightstand drawer', type: 'search', gives: 'flashlight',
+    text: 'You ease the drawer open. A flashlight rolls into your palm.',
+    emptyText: 'Empty now. Just a dead moth and a hair tie.',
+  },
+  note: {
+    label: 'Crumpled note', type: 'read',
+    text: '“If you’re reading this, I didn’t make it. The BASEMENT KEY is in the locked kitchen drawer — the lock is old, you can work it. The MASTER KEY is in the toolbox downstairs; you’ll need something heavy to open it. The chain on the front door needs cutters. It hunts by SOUND. Don’t make a sound.”',
+  },
+  bed: {
+    label: 'Slide under the bed', type: 'hide',
+    text: 'You slide under the bed and hold your breath until your chest burns. The house settles.',
+    usedText: 'You just did that. Lying here longer won’t help — the house is listening.',
+  },
+  linenCloset: {
+    label: 'Linen closet', type: 'search', gives: 'hammer',
+    text: 'Behind moth-eaten towels: a claw hammer, its head crusted with something dark.',
+    emptyText: 'Towels. Mildew. Nothing else.',
+  },
+  portrait: {
+    label: 'Family portrait', type: 'read',
+    text: 'A family of four. Someone has scratched out every face but one. The remaining face is smiling at you.',
+  },
+  cupboards: {
+    label: 'Cupboards', type: 'search',
+    text: 'Tins with no labels. A jar of teeth. Nothing useful — and that was loud.',
+    emptyText: 'You’ve already searched these. Don’t push your luck.',
+  },
+  lockedDrawer: {
+    label: 'Locked drawer', type: 'lockpick', gives: 'basementKey', questions: 2,
+    text: 'The pins give one by one… click. Inside: the Basement Key.',
+    emptyText: 'Open and empty.',
+  },
+  fridge: {
+    label: 'Fridge note', type: 'read',
+    text: 'A grocery list in shaky handwriting: “milk, eggs, more rope, new lock for front door — CHAIN.”',
+  },
+  workbench: {
+    label: 'Workbench', type: 'search', gives: 'boltCutters',
+    text: 'Your fingers close around cold steel handles. Bolt cutters.',
+    emptyText: 'Sawdust and rusted nails.',
+  },
+  toolbox: {
+    label: 'Padlocked toolbox', type: 'smash', gives: 'masterKey', requires: 'hammer',
+    text: 'CRACK. The padlock shatters — the sound echoes up through the whole house. A brass key glints inside.',
+    lockedText: 'Padlocked shut. You’d need something heavy to break it… and it would be loud.',
+    emptyText: 'Smashed open. Empty.',
+  },
+  frontDoor: {
+    label: 'Front door', type: 'exit', requires: ['masterKey', 'boltCutters'], questions: 3,
+    lockedText: 'A chain and a deadbolt. You need the MASTER KEY and the BOLT CUTTERS.',
+  },
+};
+
+return { MAX_DAYS, START_ROOM, NOISE, DIFFICULTY, ITEMS, ROOMS, HOTSPOTS };
+})();
+
+/* ── trivia.js ── */
+__m.trivia = (() => {
+// ─────────────────────────────────────────────────────────────
+//  Trivia engine — DOM-free so it can be unit-tested in Node.
+//  Pulls random, non-repeating questions weighted by difficulty.
+// ─────────────────────────────────────────────────────────────
+
+const DIFFICULTIES = ['easy', 'medium', 'hard'];
+
+function validateQuestions(list) {
+  const errors = [];
+  const ids = new Set();
+  list.forEach((q, i) => {
+    const where = q.id ?? `#${i}`;
+    if (!q.id) errors.push(`${where}: missing id`);
+    if (ids.has(q.id)) errors.push(`${where}: duplicate id`);
+    ids.add(q.id);
+    if (!DIFFICULTIES.includes(q.difficulty)) errors.push(`${where}: bad difficulty "${q.difficulty}"`);
+    if (!Array.isArray(q.tags) || q.tags.length === 0) errors.push(`${where}: needs at least one tag`);
+    if (typeof q.question !== 'string' || !q.question.trim()) errors.push(`${where}: empty question`);
+    if (!Array.isArray(q.options) || q.options.length < 2) errors.push(`${where}: needs 2+ options`);
+    else if (new Set(q.options).size !== q.options.length) errors.push(`${where}: duplicate options`);
+    if (!Number.isInteger(q.answer) || q.answer < 0 || q.answer >= (q.options?.length ?? 0)) {
+      errors.push(`${where}: answer index out of range`);
+    }
+  });
+  return errors;
+}
+
+function shuffle(arr, rng) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+class TriviaEngine {
+  /**
+   * @param {Array} questions  raw entries from questions.json
+   * @param {Object} opts      { rng, tags } — tags filters the pool (empty = all)
+   */
+  constructor(questions, { rng = Math.random, tags = [] } = {}) {
+    this.rng = rng;
+    this.all = tags.length
+      ? questions.filter(q => q.tags.some(t => tags.includes(t)))
+      : questions.slice();
+    if (this.all.length === 0) this.all = questions.slice();
+    this.used = new Set();
+  }
+
+  get remaining() {
+    return this.all.length - this.used.size;
+  }
+
+  /** Weighted pick of a difficulty that still has unused questions. */
+  #pickDifficulty(weights) {
+    const avail = DIFFICULTIES.filter(d => this.all.some(q => q.difficulty === d && !this.used.has(q.id)));
+    if (avail.length === 0) return null;
+    const total = avail.reduce((s, d) => s + (weights[d] ?? 1), 0);
+    let roll = this.rng() * total;
+    for (const d of avail) {
+      roll -= weights[d] ?? 1;
+      if (roll <= 0) return d;
+    }
+    return avail[avail.length - 1];
+  }
+
+  /**
+   * Draw `count` unseen questions. When the pool runs dry it is reshuffled,
+   * but never repeats inside a single draw.
+   * @returns {Array<{id, question, options, correctIndex, difficulty, tags}>}
+   */
+  draw(count = 1, weights = { easy: 1, medium: 1, hard: 1 }) {
+    const out = [];
+    const thisDraw = new Set();
+    for (let n = 0; n < count; n++) {
+      if (this.remaining === 0) {
+        // Recycle everything except what's in this draw
+        this.used = new Set(thisDraw);
+      }
+      const diff = this.#pickDifficulty(weights);
+      const pool = this.all.filter(q => !this.used.has(q.id) && (diff ? q.difficulty === diff : true));
+      if (pool.length === 0) break;
+      const q = pool[Math.floor(this.rng() * pool.length)];
+      this.used.add(q.id);
+      thisDraw.add(q.id);
+      out.push(this.#prepare(q));
+    }
+    return out;
+  }
+
+  #prepare(q) {
+    const order = shuffle(q.options.map((_, i) => i), this.rng);
+    return {
+      id: q.id,
+      question: q.question,
+      difficulty: q.difficulty,
+      tags: q.tags,
+      options: order.map(i => q.options[i]),
+      correctIndex: order.indexOf(q.answer),
+    };
+  }
+}
+
+return { DIFFICULTIES, validateQuestions, TriviaEngine };
+})();
+
+/* ── state.js ── */
+__m.state = (() => {
+// ─────────────────────────────────────────────────────────────
+//  Game state machine — DOM-free. The UI listens to events and
+//  calls methods; nothing in here touches the page or audio.
+//
+//  Phases:  exploring → encounter → (exploring | caught | won)
+//           caught → exploring (next day)  |  gameover (after Day 5)
+// ─────────────────────────────────────────────────────────────
+
+const { MAX_DAYS, START_ROOM, NOISE, DIFFICULTY, ITEMS, ROOMS, HOTSPOTS } = __m.config;
+
+class Game {
+  constructor(trivia, { difficulty = 'normal', now = () => Date.now() } = {}) {
+    this.trivia = trivia;
+    this.now = now;
+    this.listeners = {};
+    this.setDifficulty(difficulty);
+    this.reset();
+  }
+
+  // ── tiny event emitter ────────────────────────────────────
+  on(evt, fn) { (this.listeners[evt] ??= []).push(fn); return this; }
+  emit(evt, ...args) { (this.listeners[evt] ?? []).forEach(fn => fn(...args)); }
+
+  setDifficulty(key) {
+    this.difficultyKey = DIFFICULTY[key] ? key : 'normal';
+    this.difficulty = DIFFICULTY[this.difficultyKey];
+  }
+
+  reset() {
+    this.state = {
+      phase: 'exploring',
+      currentDay: 1,
+      noiseLevel: 0,
+      currentRoom: START_ROOM,
+      inventory: [],
+      flashlightOn: false,
+      isPursued: false,
+      searched: [],        // hotspot ids already used up
+      hideUsed: false,     // bed can be used once per visit to the bedroom
+      encounter: null,
+      stats: { correct: 0, wrong: 0, caught: 0, pursuitsSurvived: 0, startedAt: this.now(), endedAt: null },
+    };
+    this.emit('change', this.state);
+  }
+
+  // ── read helpers ──────────────────────────────────────────
+  get room() { return ROOMS[this.state.currentRoom]; }
+  has(item) { return this.state.inventory.includes(item); }
+  isDark() { return !!this.room.dark && !this.state.flashlightOn; }
+  canAct() { return this.state.phase === 'exploring'; }
+
+  /** Hotspots visible in the current room, with a display status. */
+  visibleHotspots() {
+    if (this.isDark()) return [{ id: 'fumble', label: 'Feel around in the dark', type: 'fumble', status: 'available' }];
+    return this.room.hotspots.map(id => {
+      const h = HOTSPOTS[id];
+      const used = this.state.searched.includes(id);
+      return { id, ...h, status: used ? 'used' : 'available' };
+    });
+  }
+
+  exits() {
+    return this.room.exits.map(id => ({
+      id,
+      name: ROOMS[id].name,
+      locked: !!ROOMS[id].requires && !this.has(ROOMS[id].requires),
+    }));
+  }
+
+  // ── noise ─────────────────────────────────────────────────
+  addNoise(amount, reason = '') {
+    const scaled = amount > 0 ? Math.round(amount * this.difficulty.noiseMult) : amount;
+    const before = this.state.noiseLevel;
+    this.state.noiseLevel = Math.max(0, Math.min(NOISE.max, before + scaled));
+    this.emit('noise', this.state.noiseLevel, scaled, reason);
+    if (this.state.noiseLevel >= NOISE.max && this.state.phase === 'exploring') {
+      this.startEncounter('pursuit');
+    }
+  }
+
+  // ── player actions ────────────────────────────────────────
+  move(roomId) {
+    if (!this.canAct()) return false;
+    if (!this.room.exits.includes(roomId)) return false;
+    const target = ROOMS[roomId];
+    if (target.requires && !this.has(target.requires)) {
+      this.emit('message', `The ${target.name.toLowerCase()} door is locked. You need the ${ITEMS[target.requires].name}.`, 'warn');
+      this.emit('sfx', 'rattle');
+      return false;
+    }
+    const prev = this.state.currentRoom;
+    this.state.currentRoom = roomId;
+    if (roomId === 'bedroom' && prev !== 'bedroom') this.state.hideUsed = false;
+
+    let noise = NOISE.move;
+    if (target.creaky) noise += NOISE.creakyBonus;
+    if (this.state.flashlightOn) noise += NOISE.flashlightMove;
+
+    this.emit('sfx', target.creaky ? 'creak' : 'step');
+    this.emit('message', `You creep into the ${target.name.toLowerCase()}.`, 'move');
+    this.emit('change', this.state);
+    this.addNoise(noise, target.creaky ? 'creaky floorboards' : 'footsteps');
+    return true;
+  }
+
+  toggleFlashlight() {
+    if (!this.has('flashlight')) return false;
+    if (this.state.phase !== 'exploring') return false;
+    this.state.flashlightOn = !this.state.flashlightOn;
+    this.emit('sfx', 'click');
+    this.emit('change', this.state);
+    return true;
+  }
+
+  interact(hotspotId) {
+    if (!this.canAct()) return false;
+    if (hotspotId === 'fumble') return this.#fumble();
+    if (!this.room.hotspots.includes(hotspotId) || this.isDark()) return false;
+
+    const h = HOTSPOTS[hotspotId];
+    const used = this.state.searched.includes(hotspotId);
+
+    switch (h.type) {
+      case 'read':
+        this.emit('message', h.text, 'clue');
+        this.emit('sfx', 'paper');
+        return true;
+
+      case 'hide':
+        if (this.state.hideUsed) { this.emit('message', h.usedText, 'warn'); return false; }
+        this.state.hideUsed = true;
+        this.emit('message', h.text, 'calm');
+        this.emit('sfx', 'breath');
+        this.addNoise(NOISE.hideRelief, 'holding your breath');
+        this.emit('change', this.state);
+        return true;
+
+      case 'search':
+        if (used) { this.emit('message', h.emptyText, 'dim'); return false; }
+        this.#markUsed(hotspotId);
+        this.emit('sfx', 'rummage');
+        this.emit('message', h.text, h.gives ? 'item' : 'dim');
+        if (h.gives) this.#give(h.gives);
+        this.addNoise(NOISE.search, 'searching');
+        return true;
+
+      case 'smash':
+        if (used) { this.emit('message', h.emptyText, 'dim'); return false; }
+        if (!this.has(h.requires)) { this.emit('message', h.lockedText, 'warn'); return false; }
+        this.#markUsed(hotspotId);
+        this.emit('sfx', 'smash');
+        this.emit('shake', 'big');
+        this.emit('message', h.text, 'item');
+        this.#give(h.gives);
+        this.addNoise(NOISE.loudTool, 'the hammer');
+        return true;
+
+      case 'lockpick':
+        if (used) { this.emit('message', h.emptyText, 'dim'); return false; }
+        this.startEncounter('lockpick', { hotspotId, count: h.questions });
+        return true;
+
+      case 'exit':
+        if (!h.requires.every(i => this.has(i))) {
+          this.emit('message', h.lockedText, 'warn');
+          this.emit('sfx', 'rattle');
+          return false;
+        }
+        this.startEncounter('standoff', { count: h.questions });
+        return true;
+    }
+    return false;
+  }
+
+  #fumble() {
+    this.emit('sfx', 'clatter');
+    this.emit('message', 'You sweep your hand across a shelf — a paint can hits the floor with a BANG. You need light.', 'warn');
+    this.addNoise(NOISE.fumbleDark, 'fumbling in the dark');
+    return true;
+  }
+
+  #markUsed(id) { if (!this.state.searched.includes(id)) this.state.searched.push(id); }
+
+  #give(item) {
+    if (this.has(item)) return;
+    this.state.inventory.push(item);
+    this.emit('item', item);
+    this.emit('change', this.state);
+  }
+
+  // ── encounters (pursuit / lockpick / standoff) ────────────
+  startEncounter(kind, { hotspotId = null, count } = {}) {
+    const n = count ?? this.room.danger;
+    const questions = this.trivia.draw(n, this.difficulty.weights);
+    this.state.phase = 'encounter';
+    this.state.isPursued = kind !== 'lockpick';
+    this.state.encounter = {
+      kind, hotspotId,
+      room: this.state.currentRoom,
+      hideSpot: this.room.hideSpot,
+      questions,
+      index: 0,
+      seconds: this.difficulty.seconds,
+    };
+    this.emit('encounter', this.state.encounter);
+    this.emit('change', this.state);
+  }
+
+  get currentQuestion() {
+    const e = this.state.encounter;
+    return e ? e.questions[e.index] : null;
+  }
+
+  /**
+   * Answer the current question. Pass -1 for a timeout.
+   * @returns {{correct:boolean, correctIndex:number, done:boolean, outcome?:string}}
+   */
+  answer(choice) {
+    const e = this.state.encounter;
+    if (this.state.phase !== 'encounter' || !e) return null;
+    const q = e.questions[e.index];
+    const correct = choice === q.correctIndex;
+    correct ? this.state.stats.correct++ : this.state.stats.wrong++;
+
+    if (!correct) {
+      const outcome = this.#encounterFailed();
+      return { correct, correctIndex: q.correctIndex, done: true, outcome };
+    }
+    e.index++;
+    if (e.index < e.questions.length) {
+      this.emit('change', this.state);
+      return { correct, correctIndex: q.correctIndex, done: false };
+    }
+    const outcome = this.#encounterPassed();
+    return { correct, correctIndex: q.correctIndex, done: true, outcome };
+  }
+
+  #endEncounter() {
+    this.state.encounter = null;
+    this.state.isPursued = false;
+    this.state.phase = 'exploring';
+  }
+
+  #encounterPassed() {
+    const { kind, hotspotId } = this.state.encounter;
+    if (kind === 'pursuit') {
+      this.#endEncounter();
+      this.state.stats.pursuitsSurvived++;
+      this.state.noiseLevel = NOISE.afterEscape;
+      this.emit('message', 'The footsteps linger… then shuffle away down the hall. You breathe again.', 'calm');
+      this.emit('noise', this.state.noiseLevel, 0, 'reset');
+      this.emit('change', this.state);
+      return 'escaped';
+    }
+    if (kind === 'lockpick') {
+      this.#endEncounter();
+      const h = HOTSPOTS[hotspotId];
+      this.#markUsed(hotspotId);
+      this.emit('sfx', 'unlock');
+      this.emit('message', h.text, 'item');
+      this.#give(h.gives);
+      this.emit('change', this.state);
+      return 'unlocked';
+    }
+    // standoff — you're out
+    this.state.encounter = null;
+    this.state.isPursued = false;
+    this.state.phase = 'won';
+    this.state.stats.endedAt = this.now();
+    this.emit('change', this.state);
+    this.emit('win', this.summary());
+    return 'won';
+  }
+
+  #encounterFailed() {
+    const { kind } = this.state.encounter;
+    if (kind === 'lockpick') {
+      this.#endEncounter();
+      this.emit('sfx', 'rattle');
+      this.emit('message', 'A pin snaps back with a loud CLACK. The lock holds.', 'warn');
+      this.emit('change', this.state);
+      this.addNoise(NOISE.lockpickFail, 'fumbling the lock');
+      return 'lockFailed';
+    }
+    // pursuit or standoff → caught
+    this.state.encounter = null;
+    this.state.isPursued = false;
+    this.state.stats.caught++;
+    if (this.state.currentDay >= MAX_DAYS) {
+      this.state.phase = 'gameover';
+      this.state.stats.endedAt = this.now();
+      this.emit('caught', { final: true });
+      this.emit('change', this.state);
+      this.emit('gameover', this.summary());
+      return 'gameover';
+    }
+    this.state.phase = 'caught';
+    this.emit('caught', { final: false });
+    this.emit('change', this.state);
+    return 'caught';
+  }
+
+  /** Called by the UI after the jump scare / day-transition screen. */
+  wake() {
+    if (this.state.phase !== 'caught') return false;
+    this.state.currentDay++;
+    this.state.currentRoom = START_ROOM;
+    this.state.noiseLevel = 0;
+    this.state.flashlightOn = false;
+    this.state.hideUsed = false;
+    this.state.phase = 'exploring';
+    this.emit('message', `Day ${this.state.currentDay}. You wake in the bedroom with a pounding headache. Your pockets are still full.`, 'day');
+    this.emit('noise', 0, 0, 'wake');
+    this.emit('change', this.state);
+    return true;
+  }
+
+  summary() {
+    const s = this.state.stats;
+    const seconds = Math.round(((s.endedAt ?? this.now()) - s.startedAt) / 1000);
+    const won = this.state.phase === 'won';
+    const score = won
+      ? s.correct * 100 + (MAX_DAYS - this.state.currentDay + 1) * 500 + Math.max(0, 900 - seconds) * 2
+      : s.correct * 100;
+    return {
+      won,
+      day: this.state.currentDay,
+      seconds,
+      score,
+      correct: s.correct,
+      wrong: s.wrong,
+      caught: s.caught,
+      pursuitsSurvived: s.pursuitsSurvived,
+      difficulty: this.difficultyKey,
+    };
+  }
+}
+
+return { Game };
+})();
+
+/* ── audio.js ── */
+__m.audio = (() => {
+// ─────────────────────────────────────────────────────────────
+//  Procedural sound design with the Web Audio API.
+//  Every sound is synthesized at runtime — no audio files needed.
+//  Drop real recordings into /assets/audio later and route them
+//  through `this.bus` if you want (see README → Backlog).
+// ─────────────────────────────────────────────────────────────
+
+class AudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.volume = 0.8;
+    this.muted = false;
+    this.tension = 0;
+    this._hbTimer = null;
+  }
+
+  /** Must be called from a user gesture (click / keypress). */
+  init() {
+    if (this.ctx) { this.ctx.resume?.(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = (this.ctx = new AC());
+
+    this.master = ctx.createGain();
+    this.master.gain.value = this.muted ? 0 : this.volume;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14;
+    comp.ratio.value = 4;
+    this.master.connect(comp).connect(ctx.destination);
+
+    this.bus = ctx.createGain();     // one-shot effects
+    this.bus.connect(this.master);
+
+    // 2 seconds of white noise, reused by every noisy sound
+    const len = ctx.sampleRate * 2;
+    this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = this.noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+
+    this.#startDrone();
+    this.#heartbeatLoop();
+  }
+
+  setVolume(v) {
+    this.volume = v;
+    if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : v, this.ctx.currentTime, 0.05);
+  }
+
+  setMuted(m) {
+    this.muted = m;
+    this.setVolume(this.volume);
+  }
+
+  /** 0 = calm, 1 = about to be found. Drives drone + heartbeat. */
+  setTension(t) {
+    this.tension = Math.max(0, Math.min(1, t));
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    this.droneFilter.frequency.setTargetAtTime(140 + this.tension * 520, now, 0.6);
+    this.droneGain.gain.setTargetAtTime(0.16 + this.tension * 0.14, now, 0.6);
+    this.hissGain.gain.setTargetAtTime(0.012 + this.tension * 0.03, now, 0.6);
+  }
+
+  // ── building blocks ───────────────────────────────────────
+  #out(pan = 0) {
+    if (!this.ctx.createStereoPanner) return this.bus;
+    const p = this.ctx.createStereoPanner();
+    p.pan.value = pan;
+    p.connect(this.bus);
+    return p;
+  }
+
+  #env(gainNode, when, attack, decay, peak) {
+    const g = gainNode.gain;
+    g.setValueAtTime(0.0001, when);
+    g.exponentialRampToValueAtTime(Math.max(peak, 0.0002), when + attack);
+    g.exponentialRampToValueAtTime(0.0001, when + attack + decay);
+  }
+
+  #noise({ when = 0, dur = 0.3, type = 'lowpass', freq = 800, q = 1, gain = 0.5, attack = 0.005, pan = 0, freqEnd } = {}) {
+    const ctx = this.ctx;
+    const t = ctx.currentTime + when;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.setValueAtTime(freq, t);
+    if (freqEnd) f.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+    f.Q.value = q;
+    const g = ctx.createGain();
+    this.#env(g, t, attack, dur, gain);
+    src.connect(f).connect(g).connect(this.#out(pan));
+    src.start(t, Math.random() * 1.5);
+    src.stop(t + attack + dur + 0.05);
+  }
+
+  #tone({ when = 0, freq = 440, freqEnd, dur = 0.3, type = 'sine', gain = 0.3, attack = 0.005, pan = 0, detune = 0 } = {}) {
+    const ctx = this.ctx;
+    const t = ctx.currentTime + when;
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.detune.value = detune;
+    o.frequency.setValueAtTime(freq, t);
+    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t + attack + dur);
+    const g = ctx.createGain();
+    this.#env(g, t, attack, dur, gain);
+    o.connect(g).connect(this.#out(pan));
+    o.start(t);
+    o.stop(t + attack + dur + 0.05);
+  }
+
+  // ── ambience ──────────────────────────────────────────────
+  #startDrone() {
+    const ctx = this.ctx;
+    this.droneFilter = ctx.createBiquadFilter();
+    this.droneFilter.type = 'lowpass';
+    this.droneFilter.frequency.value = 140;
+    this.droneFilter.Q.value = 6;
+    this.droneGain = ctx.createGain();
+    this.droneGain.gain.value = 0.16;
+    this.droneFilter.connect(this.droneGain).connect(this.master);
+
+    // Two detuned saws a tritone apart = instant unease
+    [[41.2, 0], [41.2, 9], [58.27, -6]].forEach(([f, det]) => {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      o.detune.value = det;
+      o.connect(this.droneFilter);
+      o.start();
+    });
+
+    // Slow LFO breathing on the filter
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.value = 0.07;
+    lfoGain.gain.value = 60;
+    lfo.connect(lfoGain).connect(this.droneFilter.frequency);
+    lfo.start();
+
+    // Room tone: very quiet filtered hiss
+    const hiss = ctx.createBufferSource();
+    hiss.buffer = this.noiseBuf;
+    hiss.loop = true;
+    const hf = ctx.createBiquadFilter();
+    hf.type = 'bandpass';
+    hf.frequency.value = 400;
+    hf.Q.value = 0.5;
+    this.hissGain = ctx.createGain();
+    this.hissGain.gain.value = 0.012;
+    hiss.connect(hf).connect(this.hissGain).connect(this.master);
+    hiss.start();
+  }
+
+  #heartbeatLoop() {
+    const beat = () => {
+      const bpm = 52 + this.tension * 98;              // 52 → 150 bpm
+      const vol = 0.05 + this.tension * 0.45;
+      if (this.ctx.state === 'running') {
+        this.#tone({ freq: 62, freqEnd: 40, dur: 0.14, gain: vol, attack: 0.01 });
+        this.#tone({ when: 0.17, freq: 55, freqEnd: 36, dur: 0.16, gain: vol * 0.7, attack: 0.01 });
+      }
+      this._hbTimer = setTimeout(beat, 60000 / bpm);
+    };
+    beat();
+  }
+
+  // ── one-shots ─────────────────────────────────────────────
+  footstep(volume = 0.5, pan = 0, when = 0) {
+    if (!this.ctx) return;
+    this.#tone({ when, freq: 90, freqEnd: 38, dur: 0.18, gain: volume * 0.9, pan });
+    this.#noise({ when, dur: 0.12, freq: 260, q: 0.8, gain: volume * 0.6, pan });
+    if (Math.random() < 0.35) this.#creak(volume * 0.25, pan, when + 0.05);
+  }
+
+  /** A sequence of steps getting closer. Returns total duration in seconds. */
+  approach(steps = 6, interval = 0.55, from = 0.08, to = 0.9) {
+    if (!this.ctx) return steps * interval;
+    for (let i = 0; i < steps; i++) {
+      const k = i / Math.max(1, steps - 1);
+      this.footstep(from + (to - from) * k, (i % 2 ? 0.25 : -0.25) * (1 - k), i * interval);
+    }
+    return steps * interval;
+  }
+
+  #creak(gain = 0.25, pan = 0, when = 0) {
+    const f = 180 + Math.random() * 160;
+    this.#tone({ when, type: 'sawtooth', freq: f, freqEnd: f * (0.6 + Math.random() * 0.3), dur: 0.5 + Math.random() * 0.4, gain: gain * 0.35, attack: 0.08, pan });
+    this.#noise({ when, type: 'bandpass', freq: f * 3, q: 12, dur: 0.6, gain: gain * 0.5, attack: 0.1, pan });
+  }
+
+  play(name, opts = {}) {
+    if (!this.ctx) return;
+    switch (name) {
+      case 'step':    this.footstep(0.18, 0); break;
+      case 'creak':   this.footstep(0.2, 0); this.#creak(0.7, 0, 0.05); break;
+      case 'rattle':
+        for (let i = 0; i < 4; i++) this.#noise({ when: i * 0.07, dur: 0.05, type: 'bandpass', freq: 2400, q: 6, gain: 0.35 });
+        break;
+      case 'click':   this.#noise({ dur: 0.02, type: 'highpass', freq: 3000, gain: 0.4 }); break;
+      case 'paper':   this.#noise({ dur: 0.35, type: 'highpass', freq: 2500, gain: 0.12, attack: 0.05 }); break;
+      case 'breath':  this.#noise({ dur: 1.6, type: 'bandpass', freq: 900, freqEnd: 500, q: 1.2, gain: 0.12, attack: 0.5 }); break;
+      case 'rummage':
+        for (let i = 0; i < 7; i++) this.#noise({ when: i * 0.09 + Math.random() * 0.05, dur: 0.08, type: 'bandpass', freq: 1200 + Math.random() * 2000, q: 3, gain: 0.25 });
+        break;
+      case 'clatter':
+        this.#tone({ type: 'triangle', freq: 520, dur: 0.7, gain: 0.3 });
+        this.#tone({ type: 'triangle', freq: 783, dur: 0.6, gain: 0.2 });
+        this.#noise({ dur: 0.3, freq: 1800, gain: 0.5 });
+        break;
+      case 'smash':
+        this.#noise({ dur: 0.5, freq: 3000, freqEnd: 300, gain: 1 });
+        this.#tone({ freq: 70, freqEnd: 30, dur: 0.5, gain: 0.9 });
+        [1240, 1873, 2610].forEach((f, i) => this.#tone({ type: 'triangle', freq: f, dur: 1.4, gain: 0.08, when: 0.01 * i }));
+        break;
+      case 'unlock':
+        this.#noise({ dur: 0.03, type: 'highpass', freq: 2000, gain: 0.5 });
+        this.#noise({ when: 0.12, dur: 0.05, type: 'bandpass', freq: 1500, q: 4, gain: 0.6 });
+        break;
+      case 'tick':    this.#tone({ type: 'square', freq: 1400, dur: 0.03, gain: 0.08 }); break;
+      case 'correct': this.#tone({ freq: 220, dur: 0.35, gain: 0.12, attack: 0.02 }); break;
+      case 'wrong':   this.#tone({ type: 'sawtooth', freq: 110, freqEnd: 70, dur: 0.4, gain: 0.25 }); break;
+      case 'stinger': // pursuit begins
+        this.#tone({ type: 'sawtooth', freq: 55, dur: 2.2, gain: 0.35, attack: 0.6 });
+        this.#tone({ type: 'sawtooth', freq: 77.78, dur: 2.2, gain: 0.25, attack: 0.6, detune: 12 });
+        this.#noise({ dur: 2, type: 'bandpass', freq: 200, freqEnd: 1200, q: 2, gain: 0.25, attack: 0.8 });
+        break;
+      case 'jumpscare': {
+        const g = opts.gentle ? 0.35 : 1;
+        this.#noise({ dur: 1.3, type: 'bandpass', freq: 1800, q: 0.7, gain: 1.0 * g, attack: 0.002 });
+        [311, 329.6, 466, 622, 659].forEach((f, i) =>
+          this.#tone({ type: 'sawtooth', freq: f, freqEnd: f * 1.5, dur: 1.2, gain: 0.22 * g, attack: 0.002, detune: i * 17 }));
+        this.#tone({ freq: 50, freqEnd: 25, dur: 1, gain: 1 * g, attack: 0.002 });
+        break;
+      }
+      case 'door':    // the front door finally opens
+        this.#creak(0.9, 0, 0);
+        this.#noise({ when: 0.6, dur: 4, type: 'lowpass', freq: 600, freqEnd: 300, gain: 0.3, attack: 1.5 });
+        break;
+      case 'whisper':
+        this.#noise({ dur: 1.2, type: 'bandpass', freq: 3200, freqEnd: 1800, q: 8, gain: 0.08, attack: 0.4, pan: opts.pan ?? (Math.random() * 2 - 1) });
+        break;
+    }
+  }
+}
+
+return { AudioEngine };
+})();
+
+/* ── storage.js ── */
+__m.storage = (() => {
+// ─────────────────────────────────────────────────────────────
+//  localStorage persistence: settings, high scores, achievements.
+//  Wrapped in try/catch — private browsing can throw on access.
+// ─────────────────────────────────────────────────────────────
+
+const KEY = 'dont-make-a-sound.v1';
+
+const DEFAULTS = {
+  settings: { difficulty: 'normal', volume: 0.8, reducedMotion: false, muted: false },
+  stats: { bestScore: 0, fastestEscape: null, escapes: 0, deaths: 0, totalCorrect: 0, runs: 0 },
+  achievements: {},
+};
+
+const ACHIEVEMENTS = {
+  firstBlood:  { name: 'First Blood',        desc: 'Get caught for the first time.' },
+  survivor:    { name: 'Final Girl',         desc: 'Escape the house.' },
+  ghost:       { name: 'Ghost',              desc: 'Escape on Day 1 without being caught.' },
+  lastBreath:  { name: 'Last Breath',        desc: 'Escape on Day 5.' },
+  nightmare:   { name: 'Waking Nightmare',   desc: 'Escape on Nightmare difficulty.' },
+  speedrun:    { name: 'Don’t Look Back',    desc: 'Escape in under 4 minutes.' },
+  scholar:     { name: 'Horror Scholar',     desc: 'Answer 50 questions correctly across all runs.' },
+  cool:        { name: 'Ice in the Veins',   desc: 'Survive 5 Pursuit Events in a single run.' },
+};
+
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return clone(DEFAULTS);
+    const data = JSON.parse(raw);
+    return {
+      settings: { ...DEFAULTS.settings, ...data.settings },
+      stats: { ...DEFAULTS.stats, ...data.stats },
+      achievements: { ...data.achievements },
+    };
+  } catch {
+    return clone(DEFAULTS);
+  }
+}
+
+function save(data) {
+  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* storage unavailable */ }
+}
+
+function resetProgress(data) {
+  data.stats = clone(DEFAULTS.stats);
+  data.achievements = {};
+  save(data);
+}
+
+/**
+ * Fold a finished run into saved stats and return newly unlocked achievement ids.
+ */
+function recordRun(data, summary) {
+  const s = data.stats;
+  const unlocked = [];
+  const unlock = id => {
+    if (!data.achievements[id]) { data.achievements[id] = Date.now(); unlocked.push(id); }
+  };
+
+  s.runs++;
+  s.totalCorrect += summary.correct;
+  s.deaths += summary.caught;
+  if (summary.caught > 0) unlock('firstBlood');
+
+  let newBest = false;
+  if (summary.won) {
+    s.escapes++;
+    if (summary.score > s.bestScore) { s.bestScore = summary.score; newBest = true; }
+    if (s.fastestEscape === null || summary.seconds < s.fastestEscape) s.fastestEscape = summary.seconds;
+    unlock('survivor');
+    if (summary.day === 1 && summary.caught === 0) unlock('ghost');
+    if (summary.day === 5) unlock('lastBreath');
+    if (summary.difficulty === 'nightmare') unlock('nightmare');
+    if (summary.seconds < 240) unlock('speedrun');
+  }
+  if (summary.pursuitsSurvived >= 5) unlock('cool');
+  if (s.totalCorrect >= 50) unlock('scholar');
+
+  save(data);
+  return { unlocked, newBest };
+}
+
+/** Called the moment you're caught, so First Blood pops even mid-run. */
+function unlockNow(data, id) {
+  if (data.achievements[id]) return false;
+  data.achievements[id] = Date.now();
+  save(data);
+  return true;
+}
+
+return { ACHIEVEMENTS, load, save, resetProgress, recordRun, unlockNow };
+})();
+
+/* ── art.js ── */
+__m.art = (() => {
+// ─────────────────────────────────────────────────────────────
+//  Room art — procedural SVG scenes (no image files).
+//  Every room is drawn on a fixed 1600×900 canvas with one-point
+//  perspective, filter-based textures (grain, water stains) and
+//  layered light. Each room has two layers:
+//    base — static, heavy filters (rendered once)
+//    fx   — light animated overlay (rain, flicker, drips, shadows)
+//  Hotspot positions are in the same 1600×900 space, so they
+//  always line up with the objects they belong to.
+// ─────────────────────────────────────────────────────────────
+
+const W = 1600, H = 900;
+const VP = [800, 420];
+
+const pts = (arr) => arr.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+const poly = (arr, attrs = '') => `<polygon points="${pts(arr)}" ${attrs}/>`;
+const wrap = (body) =>
+  `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
+
+// ── shared texture filters ──────────────────────────────────
+const FILTERS = `
+<defs>
+  <filter id="t-grain" x="0" y="0" width="100%" height="100%" filterUnits="userSpaceOnUse">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" stitchTiles="stitch"/>
+    <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.4 0 0 0 -0.55"/>
+  </filter>
+  <filter id="t-stain" x="0" y="0" width="100%" height="100%" filterUnits="userSpaceOnUse">
+    <feTurbulence type="fractalNoise" baseFrequency="0.004 0.011" numOctaves="4" seed="21"/>
+    <feColorMatrix values="0 0 0 0 0.07  0 0 0 0 0.045  0 0 0 0 0.02  3.2 0 0 0 -1.62"/>
+  </filter>
+  <filter id="t-mottle" x="0" y="0" width="100%" height="100%" filterUnits="userSpaceOnUse">
+    <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" seed="8"/>
+    <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.9 0 0 0 -0.3"/>
+  </filter>
+  <filter id="b3"><feGaussianBlur stdDeviation="3"/></filter>
+  <filter id="b8" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
+  <filter id="b20" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="20"/></filter>
+  <filter id="b40" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="40"/></filter>
+  <radialGradient id="glow-warm"><stop offset="0" stop-color="#ffd9a0" stop-opacity="0.9"/><stop offset="0.25" stop-color="#ffb060" stop-opacity="0.35"/><stop offset="1" stop-color="#ff9030" stop-opacity="0"/></radialGradient>
+  <radialGradient id="glow-sick"><stop offset="0" stop-color="#e6ffc0" stop-opacity="0.9"/><stop offset="0.25" stop-color="#b8d890" stop-opacity="0.3"/><stop offset="1" stop-color="#90b070" stop-opacity="0"/></radialGradient>
+  <radialGradient id="glow-moon"><stop offset="0" stop-color="#eaf2ff" stop-opacity="1"/><stop offset="0.12" stop-color="#cfdcf5" stop-opacity="0.8"/><stop offset="0.4" stop-color="#8ea6d0" stop-opacity="0.15"/><stop offset="1" stop-color="#8ea6d0" stop-opacity="0"/></radialGradient>
+  <radialGradient id="glow-ember"><stop offset="0" stop-color="#ffb347" stop-opacity="0.95"/><stop offset="0.3" stop-color="#ff5a1a" stop-opacity="0.45"/><stop offset="1" stop-color="#ff2a00" stop-opacity="0"/></radialGradient>
+  <radialGradient id="vig" cx="50%" cy="48%" r="70%"><stop offset="0.45" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.85"/></radialGradient>
+</defs>`;
+
+// ── geometry helpers ────────────────────────────────────────
+// A room is a back wall rect (bx1..bx2, by1..by2) seen from the centre.
+function geom(bx1, by1, bx2, by2) {
+  const g = { bx1, by1, bx2, by2 };
+  // y on the left wall at screen-x, v = 0 (ceiling line) … 1 (floor line)
+  g.ly = (x, v) => { const t = by1 * x / bx1, b = H - (H - by2) * x / bx1; return t + (b - t) * v; };
+  g.ry = (x, v) => { const d = W - x, r = W - bx2; const t = by1 * d / r, b = H - (H - by2) * d / r; return t + (b - t) * v; };
+  // floor point along the perspective line that meets the back wall at xb
+  g.fx = (xb, y) => VP[0] + (xb - VP[0]) * (y - VP[1]) / (by2 - VP[1]);
+  g.wallQuadL = (x1, x2, v1, v2) => [[x1, g.ly(x1, v1)], [x2, g.ly(x2, v1)], [x2, g.ly(x2, v2)], [x1, g.ly(x1, v2)]];
+  g.wallQuadR = (x1, x2, v1, v2) => [[x1, g.ry(x1, v1)], [x2, g.ry(x2, v1)], [x2, g.ry(x2, v2)], [x1, g.ry(x1, v2)]];
+  g.ceil = [[0, 0], [W, 0], [bx2, by1], [bx1, by1]];
+  g.floor = [[0, H], [W, H], [bx2, by2], [bx1, by2]];
+  g.left = [[0, 0], [bx1, by1], [bx1, by2], [0, H]];
+  g.right = [[W, 0], [bx2, by1], [bx2, by2], [W, H]];
+  g.back = [[bx1, by1], [bx2, by1], [bx2, by2], [bx1, by2]];
+  return g;
+}
+
+function shell(g, c) {
+  return `
+  <defs>
+    <linearGradient id="s-l" x1="0" x2="1"><stop offset="0" stop-color="${c.sideFar}"/><stop offset="1" stop-color="${c.side}"/></linearGradient>
+    <linearGradient id="s-r" x1="1" x2="0"><stop offset="0" stop-color="${c.sideFar}"/><stop offset="1" stop-color="${c.side}"/></linearGradient>
+    <linearGradient id="s-c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="${c.ceil}"/></linearGradient>
+    <linearGradient id="s-f" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${c.floorNear}"/><stop offset="1" stop-color="${c.floor}"/></linearGradient>
+    <linearGradient id="s-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.backTop ?? c.back}"/><stop offset="1" stop-color="${c.back}"/></linearGradient>
+    <clipPath id="c-walls">${poly(g.left)}${poly(g.right)}${poly(g.back)}</clipPath>
+    <clipPath id="c-floor">${poly(g.floor)}</clipPath>
+    <clipPath id="c-back">${poly(g.back)}</clipPath>
+  </defs>
+  ${poly(g.ceil, 'fill="url(#s-c)"')}
+  ${poly(g.left, 'fill="url(#s-l)"')}
+  ${poly(g.right, 'fill="url(#s-r)"')}
+  ${poly(g.back, 'fill="url(#s-b)"')}
+  ${poly(g.floor, 'fill="url(#s-f)"')}`;
+}
+
+// Weathering on walls + film grain over everything
+function weather(stain = 0.9, grain = 0.55) {
+  return `
+  <rect width="${W}" height="${H}" filter="url(#t-stain)" clip-path="url(#c-walls)" opacity="${stain}"/>
+  <rect width="${W}" height="${H}" filter="url(#t-mottle)" opacity="0.35"/>
+  <rect width="${W}" height="${H}" filter="url(#t-grain)" opacity="${grain}"/>`;
+}
+
+// Corner shadows + baseboards so the box reads as a room
+function edges(g, trim = '#0a0806') {
+  const { bx1, by1, bx2, by2 } = g;
+  return `
+  <g stroke="#000" stroke-opacity="0.55" stroke-width="6" filter="url(#b3)">
+    <line x1="0" y1="0" x2="${bx1}" y2="${by1}"/><line x1="${W}" y1="0" x2="${bx2}" y2="${by1}"/>
+    <line x1="${bx1}" y1="${by1}" x2="${bx1}" y2="${by2}"/><line x1="${bx2}" y1="${by1}" x2="${bx2}" y2="${by2}"/>
+  </g>
+  ${poly([[0, H], [bx1, by2], [bx1, by2 - 14], [0, H - 50]], `fill="${trim}"`)}
+  ${poly([[W, H], [bx2, by2], [bx2, by2 - 14], [W, H - 50]], `fill="${trim}"`)}
+  <rect x="${bx1}" y="${by2 - 14}" width="${bx2 - bx1}" height="14" fill="${trim}"/>`;
+}
+
+function planks(g, color = '#000', n = 14) {
+  let s = `<g clip-path="url(#c-floor)" stroke="${color}" stroke-opacity="0.55">`;
+  const step = (g.bx2 - g.bx1) / n;
+  for (let i = -4; i <= n + 4; i++) {
+    const xb = g.bx1 + i * step;
+    s += `<line x1="${xb}" y1="${g.by2}" x2="${g.fx(xb, H)}" y2="${H}" stroke-width="${1 + Math.abs(i - n / 2) * 0.25}"/>`;
+  }
+  // staggered butt joints
+  const rows = [g.by2 + 18, g.by2 + 44, g.by2 + 80, g.by2 + 130, g.by2 + 200];
+  rows.forEach((y, r) => {
+    for (let i = -4 + (r % 2); i <= n + 4; i += 2) {
+      const a = g.fx(g.bx1 + i * step, y), b = g.fx(g.bx1 + (i + 1) * step, y);
+      s += `<line x1="${a}" y1="${y}" x2="${b}" y2="${y}" stroke-width="${1 + r * 0.6}"/>`;
+    }
+  });
+  return s + '</g>';
+}
+
+function checker(g, c1, c2, n = 9) {
+  const step = (g.bx2 - g.bx1) / n;
+  const ys = [0, 1, 2, 3, 4, 5, 6].map((j) => VP[1] + (g.by2 - VP[1]) / (1 - j * 0.12));
+  let s = `<g clip-path="url(#c-floor)">`;
+  for (let i = -5; i < n + 5; i++) {
+    for (let j = 0; j < ys.length - 1; j++) {
+      const xa = g.bx1 + i * step, xb = xa + step;
+      const q = [[g.fx(xa, ys[j]), ys[j]], [g.fx(xb, ys[j]), ys[j]], [g.fx(xb, ys[j + 1]), ys[j + 1]], [g.fx(xa, ys[j + 1]), ys[j + 1]]];
+      s += poly(q, `fill="${(i + j) % 2 ? c1 : c2}"`);
+    }
+  }
+  return s + '</g>';
+}
+
+// Damask-ish wallpaper on the back wall
+function wallpaper(id, color, opacity = 0.18, clip = 'c-back') {
+  return `
+  <defs><pattern id="${id}" width="70" height="96" patternUnits="userSpaceOnUse">
+    <path d="M35 6 C46 20 52 30 35 44 C18 30 24 20 35 6Z M35 52 C42 62 60 64 62 78 C50 76 42 70 35 90 C28 70 20 76 8 78 C10 64 28 62 35 52Z" fill="${color}"/>
+    <circle cx="0" cy="48" r="4" fill="${color}"/><circle cx="70" cy="48" r="4" fill="${color}"/>
+  </pattern></defs>
+  <rect width="${W}" height="${H}" fill="url(#${id})" opacity="${opacity}" clip-path="url(#${clip})"/>`;
+}
+
+// A shadowy figure. Opacity is driven by CSS (--bloodiness rises each day)
+const watcher = (x, y, s = 1) => `
+  <g class="watcher" transform="translate(${x} ${y}) scale(${s})">
+    <ellipse cx="0" cy="-2" rx="34" ry="6" fill="#000" opacity="0.6" filter="url(#b3)"/>
+    <path d="M-16 -150 C-16 -172 16 -172 16 -150 C16 -136 10 -130 6 -127 L28 -112 C34 -80 34 -40 30 -2 L-30 -2 C-34 -40 -34 -80 -28 -112 L-6 -127 C-10 -130 -16 -136 -16 -150Z" fill="#020202"/>
+    <path d="M-28 -110 C-44 -70 -40 -30 -42 10" stroke="#020202" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <path d="M28 -110 C44 -70 42 -30 44 12" stroke="#020202" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <circle cx="-6" cy="-152" r="2.2" fill="#ff2a2a"/><circle cx="6" cy="-152" r="2.2" fill="#ff2a2a"/>
+    <circle cx="-6" cy="-152" r="7" fill="#ff2a2a" opacity="0.25" filter="url(#b3)"/><circle cx="6" cy="-152" r="7" fill="#ff2a2a" opacity="0.25" filter="url(#b3)"/>
+  </g>`;
+
+const bulb = (x, y1, y2, glow = 'glow-warm', lit = true, r = 260) => `
+  <line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="#050505" stroke-width="3"/>
+  <rect x="${x - 7}" y="${y2}" width="14" height="14" fill="#1a1612"/>
+  <ellipse cx="${x}" cy="${y2 + 26}" rx="13" ry="16" fill="${lit ? '#fff3d6' : '#2a2620'}" opacity="${lit ? 0.95 : 0.9}"/>
+  ${lit ? `<circle cx="${x}" cy="${y2 + 26}" r="${r}" fill="url(#${glow})" class="fx-flicker-target"/>` : ''}`;
+
+// ═════════════════════ BEDROOM ═════════════════════
+function bedroom() {
+  const g = geom(430, 190, 1170, 650);
+  const door = g.wallQuadR(1270, 1470, 0.2, 1);
+  const win = { x: 950, y: 235, w: 180, h: 250 };
+  const strips = [[230, 0.15, 0.62], [300, 0.1, 0.44], [120, 0.2, 0.8]]
+    .map(([x, v1, v2]) => poly([[x, g.ly(x, v1)], [x + 28, g.ly(x + 28, v1)], [x + 18, g.ly(x + 18, v2)], [x - 6, g.ly(x - 6, v2 - 0.08)]],
+      'fill="#5c4a46" opacity="0.8"') + `<path d="M${x - 6} ${g.ly(x - 6, v2 - 0.08)} q 10 30 34 22" stroke="#1a1210" stroke-width="5" fill="none" opacity="0.7"/>`).join('');
+
+  const base = `
+  ${FILTERS}
+  ${shell(g, { sideFar: '#1c1515', side: '#3a2c2b', back: '#45353a', backTop: '#2a2125', ceil: '#1a1515', floor: '#3a2618', floorNear: '#120b07' })}
+  ${wallpaper('wp-bed', '#7a5a62', 0.22)}
+  <defs><pattern id="wp-bed-s" width="70" height="96" patternUnits="userSpaceOnUse" patternTransform="skewY(24)">
+    <path d="M35 6 C46 20 52 30 35 44 C18 30 24 20 35 6Z" fill="#7a5a62"/></pattern>
+    <clipPath id="c-left">${poly(g.left)}</clipPath></defs>
+  <rect width="${W}" height="${H}" fill="url(#wp-bed-s)" opacity="0.14" clip-path="url(#c-left)"/>
+  ${strips}
+  ${planks(g, '#0a0604')}
+  ${edges(g, '#140d0a')}
+
+  <!-- window: night sky, moon -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#05070d"/><stop offset="1" stop-color="#18243a"/></linearGradient>
+    <clipPath id="c-win"><rect x="${win.x}" y="${win.y}" width="${win.w}" height="${win.h}"/></clipPath>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9c0ea" stop-opacity="0.32"/><stop offset="1" stop-color="#a9c0ea" stop-opacity="0"/></linearGradient>
+  </defs>
+  <rect x="${win.x - 16}" y="${win.y - 16}" width="${win.w + 32}" height="${win.h + 40}" fill="#120d0c"/>
+  <rect x="${win.x}" y="${win.y}" width="${win.w}" height="${win.h}" fill="url(#sky)"/>
+  <g clip-path="url(#c-win)">
+    <circle cx="${win.x + 120}" cy="${win.y + 70}" r="130" fill="url(#glow-moon)"/>
+    <circle cx="${win.x + 120}" cy="${win.y + 70}" r="26" fill="#e9eefa"/>
+    <circle cx="${win.x + 112}" cy="${win.y + 64}" r="6" fill="#c6cfe0"/><circle cx="${win.x + 130}" cy="${win.y + 80}" r="4" fill="#c6cfe0"/>
+    <path d="M${win.x - 10} ${win.y + 200} q 40 -60 80 -20 q 30 -50 70 -10 q 20 -30 60 0 v 80 h -210z" fill="#020305"/>
+    ${watcher(win.x + 60, win.y + 262, 0.55)}
+  </g>
+  <g stroke="#120d0c" stroke-width="10"><line x1="${win.x + win.w / 2}" y1="${win.y}" x2="${win.x + win.w / 2}" y2="${win.y + win.h}"/><line x1="${win.x}" y1="${win.y + win.h / 2}" x2="${win.x + win.w}" y2="${win.y + win.h / 2}"/></g>
+  <rect x="${win.x - 24}" y="${win.y + win.h + 14}" width="${win.w + 48}" height="12" fill="#1c1412"/>
+  <!-- moonlight falling into the room -->
+  ${poly([[win.x, win.y + win.h], [win.x + win.w, win.y + win.h], [win.x + 60, H], [win.x - 520, H]], 'fill="url(#beam)" style="mix-blend-mode:screen"')}
+  ${poly([[g.fx(win.x - 40, 720), 720], [g.fx(win.x + 120, 720), 720], [g.fx(win.x + 60, 860), 860], [g.fx(win.x - 170, 860), 860]], 'fill="#9fb6e0" opacity="0.10" filter="url(#b8)"')}
+  <!-- curtains -->
+  <path d="M${win.x - 40} ${win.y - 26} h 70 c -6 80 10 170 -4 300 l -14 -16 -10 22 -12 -14 -14 24 c -12 -110 -24 -220 -16 -316z" fill="#3a1015"/>
+  <path d="M${win.x + win.w - 30} ${win.y - 26} h 70 c 8 100 -4 200 10 310 l -14 -12 -12 20 -10 -16 -16 18 c -12 -100 -24 -200 -28 -320z" fill="#330d12"/>
+  <rect x="${win.x - 60}" y="${win.y - 34}" width="${win.w + 120}" height="8" rx="4" fill="#0e0a08"/>
+
+  <!-- picture frame, crooked -->
+  <g transform="rotate(-7 640 330)"><rect x="580" y="275" width="120" height="150" fill="#1a120c" stroke="#3a2a18" stroke-width="10"/>
+    <ellipse cx="640" cy="335" rx="26" ry="34" fill="#0b0807"/><rect x="606" y="372" width="68" height="44" fill="#0b0807"/></g>
+
+  <!-- door (right wall), ajar with hall light -->
+  ${poly(door, 'fill="#0d0907"')}
+  ${poly([[door[0][0] + 8, door[0][1] + 6], [door[0][0] + 22, door[0][1] + 4], [door[3][0] + 22, door[3][1] - 4], [door[3][0] + 8, door[3][1] - 2]], 'fill="#ffb868" opacity="0.55" filter="url(#b3)"')}
+  ${poly([[door[0][0] + 22, door[0][1] + 4], door[1], door[2], [door[3][0] + 22, door[3][1] - 4]], 'fill="#22170f"')}
+  <circle cx="${door[0][0] + 50}" cy="${(door[0][1] + door[3][1]) / 2 + 10}" r="7" fill="#7a6234"/>
+  ${poly([[door[3][0] + 10, door[3][1]], [door[3][0] - 140, H], [door[3][0] - 60, H], [door[3][0] + 22, door[3][1]]], 'fill="#ffb868" opacity="0.08" filter="url(#b8)"')}
+
+  <!-- nightstand + dead lamp -->
+  <ellipse cx="900" cy="650" rx="80" ry="10" fill="#000" opacity="0.7" filter="url(#b8)"/>
+  <rect x="840" y="540" width="120" height="110" fill="#22160e"/>
+  <rect x="840" y="540" width="120" height="10" fill="#3a2716"/>
+  <rect x="852" y="566" width="96" height="34" fill="#1a110a" stroke="#0a0604" stroke-width="2"/>
+  <circle cx="900" cy="583" r="4" fill="#8a6a3a"/>
+  <rect x="852" y="608" width="96" height="34" fill="#1a110a" stroke="#0a0604" stroke-width="2"/>
+  <rect x="893" y="480" width="8" height="60" fill="#120c08"/>
+  <path d="M866 482 h 62 l -12 -44 h -38z" fill="#4a3a2a"/>
+  <path d="M866 482 h 62 l -12 -44 h -38z" fill="url(#beam)" opacity="0.5"/>
+
+  <!-- iron bed -->
+  <ellipse cx="560" cy="800" rx="380" ry="40" fill="#000" opacity="0.85" filter="url(#b20)"/>
+  ${poly([[470, 640], [800, 640], [860, 800], [300, 800]], 'fill="#020101"')}
+  <g stroke="#0c0c0c" stroke-width="9" stroke-linecap="round">
+    <line x1="468" y1="440" x2="468" y2="660"/><line x1="802" y1="440" x2="802" y2="660"/>
+    <path d="M468 450 Q635 395 802 450" fill="none"/>
+    ${[510, 550, 590, 635, 680, 720, 760].map((x) => `<line x1="${x}" y1="${455 - Math.sin((x - 468) / 334 * Math.PI) * 38}" x2="${x}" y2="560" stroke-width="5"/>`).join('')}
+  </g>
+  <circle cx="468" cy="436" r="11" fill="#0c0c0c"/><circle cx="802" cy="436" r="11" fill="#0c0c0c"/>
+  <!-- mattress -->
+  ${poly([[478, 560], [794, 560], [880, 742], [292, 742]], 'fill="#6e6656"')}
+  ${poly([[292, 742], [880, 742], [880, 790], [292, 790]], 'fill="#4a4336"')}
+  <ellipse cx="640" cy="660" rx="120" ry="40" fill="#5a3a20" opacity="0.55" filter="url(#b8)"/>
+  <ellipse cx="520" cy="700" rx="70" ry="18" fill="#3a2010" opacity="0.5" filter="url(#b8)"/>
+  <path d="M300 742 C 380 700 420 760 520 720 C 600 690 640 760 760 712 C 820 690 860 730 880 742 L 880 800 L 300 800Z" fill="#8a8474" opacity="0.9"/>
+  <path d="M330 760 C 420 740 470 790 560 752 M600 770 C 680 740 740 790 840 760" stroke="#5a5446" stroke-width="5" fill="none"/>
+  <path d="M500 572 h 120 c 14 0 18 34 0 38 h -126 c -14 -4 -10 -38 6 -38z" fill="#8f8878"/>
+  <!-- the note on the mattress -->
+  <g transform="rotate(-14 590 650)"><rect x="562" y="632" width="56" height="40" fill="#d8cfb4"/><path d="M568 642 h 40 M568 650 h 34 M568 658 h 38" stroke="#4a3a2a" stroke-width="2"/></g>
+  <!-- the gap under the bed -->
+  ${poly([[300, 790], [880, 790], [900, 830], [280, 830]], 'fill="#000"')}
+  <rect x="296" y="790" width="10" height="56" fill="#0b0b0b"/><rect x="870" y="790" width="10" height="56" fill="#0b0b0b"/>
+
+  <!-- ceiling crack + dead bulb -->
+  <path d="M600 60 l 40 30 -18 26 50 40 -10 30" stroke="#000" stroke-width="3" fill="none" opacity="0.7"/>
+  ${bulb(800, 0, 120, 'glow-warm', false)}
+  ${weather(0.9, 0.5)}
+  <rect width="${W}" height="${H}" fill="url(#vig)"/>`;
+
+  const fx = `
+  <defs><clipPath id="fx-win"><rect x="${win.x}" y="${win.y}" width="${win.w}" height="${win.h}"/></clipPath></defs>
+  <g clip-path="url(#fx-win)">
+    <g class="fx-rain">${Array.from({ length: 34 }, (_, i) => `<line x1="${win.x - 40 + (i * 37) % (win.w + 80)}" y1="${(i * 53) % 300 - 300}" x2="${win.x - 52 + (i * 37) % (win.w + 80)}" y2="${(i * 53) % 300 - 262}" stroke="#9fb3d8" stroke-opacity="0.35" stroke-width="1.5"/>`).join('')}</g>
+    <g class="fx-rain fx-rain-2">${Array.from({ length: 34 }, (_, i) => `<line x1="${win.x - 20 + (i * 41) % (win.w + 80)}" y1="${(i * 61) % 300 - 300}" x2="${win.x - 32 + (i * 41) % (win.w + 80)}" y2="${(i * 61) % 300 - 270}" stroke="#9fb3d8" stroke-opacity="0.25" stroke-width="1"/>`).join('')}</g>
+  </g>
+  <rect class="fx-lightning" x="0" y="0" width="${W}" height="${H}" fill="#cfe0ff"/>
+  <path class="fx-sway" d="M${win.x - 40} ${win.y - 26} h 70 c -6 80 10 170 -4 300 l -14 -16 -10 22 -12 -14 -14 24 c -12 -110 -24 -220 -16 -316z" fill="#3a1015"/>
+  ${poly([[door[0][0] + 8, door[0][1] + 6], [door[0][0] + 22, door[0][1] + 4], [door[3][0] + 22, door[3][1] - 4], [door[3][0] + 8, door[3][1] - 2]], 'class="fx-shadowpass" fill="#000"')}
+  ${motes(18, 760, 520, 560, 360)}`;
+
+  return { base: wrap(base), fx: wrap(fx) };
+}
+
+// floating dust in a light shaft
+function motes(n, cx, cy, w, h) {
+  return `<g class="fx-motes">${Array.from({ length: n }, (_, i) => {
+    const x = cx - w / 2 + ((i * 97) % w), y = cy - h / 2 + ((i * 59) % h);
+    return `<circle class="fx-mote" style="animation-delay:${-(i * 1.7) % 12}s" cx="${x}" cy="${y}" r="${1 + (i % 3) * 0.7}" fill="#e8ecf5" opacity="0.5"/>`;
+  }).join('')}</g>`;
+}
+
+// ═════════════════════ HALLWAY ═════════════════════
+function hallway() {
+  const g = geom(690, 320, 910, 540);
+  const doorL = (x1, x2, open, lit) => {
+    const q = g.wallQuadL(x1, x2, 0.16, 1);
+    return `${poly(q, `fill="${open ? '#030202' : '#1c120b'}" stroke="#0a0604" stroke-width="5"`)}
+      ${open && lit ? poly([q[0], [q[0][0] + (q[1][0] - q[0][0]) * 0.25, q[1][1] + (q[0][1] - q[1][1]) * 0.75], [q[0][0] + (q[1][0] - q[0][0]) * 0.25, q[2][1] + (q[3][1] - q[2][1]) * 0.75], q[3]], 'fill="#ffa64d" opacity="0.15"') : ''}
+      ${!open ? `<circle cx="${q[1][0] - (q[1][0] - q[0][0]) * 0.2}" cy="${(q[1][1] + q[2][1]) / 2 + 10}" r="${(x2 - x1) / 30}" fill="#6e5530"/>` : ''}`;
+  };
+  const doorR = (x1, x2, open) => {
+    const q = g.wallQuadR(x1, x2, 0.16, 1);
+    return `${poly(q, `fill="${open ? '#030202' : '#1c120b'}" stroke="#0a0604" stroke-width="5"`)}
+      ${!open ? `<circle cx="${q[0][0] + (q[1][0] - q[0][0]) * 0.2}" cy="${(q[0][1] + q[3][1]) / 2 + 10}" r="${(x2 - x1) / 30}" fill="#6e5530"/>` : ''}`;
+  };
+  const frameR = (x1, x2, v1, v2, fill) => poly(g.wallQuadR(x1, x2, v1, v2), `fill="${fill}" stroke="#3a2812" stroke-width="7"`);
+  const wains = (side) => {
+    const xs = side === 'L' ? [0, 690] : [910, 1600];
+    const y = side === 'L' ? g.ly : g.ry;
+    return `<line x1="${xs[0]}" y1="${y(xs[0], 0.58)}" x2="${xs[1]}" y2="${y(xs[1], 0.58)}" stroke="#120b06" stroke-width="6"/>
+      ${poly([[xs[0], y(xs[0], 0.58)], [xs[1], y(xs[1], 0.58)], [xs[1], y(xs[1], 1)], [xs[0], y(xs[0], 1)]], 'fill="#1a110a" opacity="0.55"')}`;
+  };
+  const runner = [[g.fx(760, 540), 540], [g.fx(840, 540), 540], [g.fx(840, H), H], [g.fx(760, H), H]];
+
+  const base = `
+  ${FILTERS}
+  ${shell(g, { sideFar: '#0d0906', side: '#3c2a1a', back: '#0a0705', ceil: '#140e09', floor: '#1a120b', floorNear: '#0a0604' })}
+  <defs><clipPath id="c-lw">${poly(g.left)}</clipPath><clipPath id="c-rw">${poly(g.right)}</clipPath>
+    <pattern id="stripe" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="20" height="40" fill="#5a4026" opacity="0.18"/></pattern></defs>
+  <rect width="${W}" height="${H}" fill="url(#stripe)" clip-path="url(#c-lw)"/>
+  <rect width="${W}" height="${H}" fill="url(#stripe)" clip-path="url(#c-rw)"/>
+  ${wains('L')}${wains('R')}
+  ${planks(g, '#050302', 8)}
+  ${poly(runner, 'fill="#3a0e0e"')}
+  <g clip-path="url(#c-floor)">${poly([[g.fx(772, 540), 540], [g.fx(828, 540), 540], [g.fx(828, H), H], [g.fx(772, H), H]], 'fill="none" stroke="#7a5a20" stroke-width="3" opacity="0.5"')}</g>
+  ${edges(g, '#0d0805')}
+
+  <!-- far end: an open doorway into nothing -->
+  <rect x="740" y="370" width="120" height="170" fill="#000"/>
+  ${watcher(800, 540, 0.95)}
+  <rect x="736" y="366" width="128" height="6" fill="#1a110a"/>
+
+  <!-- doors receding -->
+  ${doorL(40, 270, true, false)}
+  ${doorL(380, 500, false)}
+  ${doorL(585, 645, true, true)}
+  ${doorR(1300, 1520, false)}
+  ${doorR(1070, 1160, true)}
+  ${doorR(950, 990, false)}
+
+  <!-- linen closet, foreground left: door hanging open, towels inside -->
+  ${poly(g.wallQuadL(40, 270, 0.16, 1), 'fill="#140e0a"')}
+  ${[0.3, 0.45, 0.6, 0.75].map((v) => poly(g.wallQuadL(60, 250, v, v + 0.012), 'fill="#2a1c12"')).join('')}
+  ${poly(g.wallQuadL(70, 240, 0.33, 0.44), 'fill="#5a5448" opacity="0.8"')}
+  ${poly(g.wallQuadL(80, 230, 0.48, 0.59), 'fill="#4e4a40" opacity="0.8"')}
+  ${poly([[270, g.ly(270, 0.16)], [360, g.ly(270, 0.16) - 60], [360, g.ly(270, 1) + 120], [270, g.ly(270, 1)]], 'fill="#22160d" stroke="#0a0604" stroke-width="5"')}
+
+  <!-- family portraits on the right wall -->
+  ${frameR(1170, 1270, 0.24, 0.5, '#120c08')}
+  ${(() => { const q = g.wallQuadR(1182, 1258, 0.28, 0.46); const cx = (q[0][0] + q[1][0]) / 2, cy = (q[0][1] + q[3][1]) / 2;
+      return poly(q, 'fill="#2a2116"') + [-22, -7, 8, 22].map((d, i) => `<ellipse cx="${cx + d}" cy="${cy - 6}" rx="6" ry="8" fill="${i === 2 ? '#c9b89a' : '#0b0806'}"/><rect x="${cx + d - 8}" y="${cy + 2}" width="16" height="26" fill="#0b0806"/>`).join('') +
+        [-22, -7, 22].map((d) => `<path d="M${cx + d - 7} ${cy - 14} l 14 14 M${cx + d + 7} ${cy - 14} l -14 14" stroke="#6a5a40" stroke-width="2"/>`).join(''); })()}
+  ${frameR(1380, 1470, 0.28, 0.44, '#1a120a')}
+  ${frameR(1010, 1050, 0.26, 0.42, '#1a120a')}
+
+  <!-- sconces -->
+  ${(() => { const x = 1240, y = g.ry(x, 0.18); return `<rect x="${x - 6}" y="${y}" width="12" height="40" fill="#2a1e10"/><circle cx="${x}" cy="${y}" r="80" fill="url(#glow-warm)" opacity="0.25"/>`; })()}
+
+  <!-- bulb in the middle distance -->
+  ${bulb(800, 160, 230, 'glow-warm', true, 330)}
+  ${poly([[790, 270], [810, 270], [g.fx(900, 760), 760], [g.fx(700, 760), 760]], 'fill="#ffcf8a" opacity="0.06" filter="url(#b20)"')}
+  <ellipse cx="800" cy="700" rx="260" ry="50" fill="#ffb060" opacity="0.10" filter="url(#b40)"/>
+  ${weather(0.85, 0.5)}
+  <rect width="${W}" height="${H}" fill="url(#vig)"/>`;
+
+  const fx = `
+  <circle class="fx-flicker" cx="800" cy="256" r="360" fill="url(#glow-warm)"/>
+  <rect class="fx-dim" width="${W}" height="${H}" fill="#000"/>
+  <defs>${FILTERS.match(/<radialGradient id="glow-warm"[\s\S]*?<\/radialGradient>/)[0]}</defs>
+  ${motes(14, 800, 380, 500, 300)}`;
+
+  return { base: wrap(base), fx: wrap(fx) };
+}
+
+// ═════════════════════ KITCHEN ═════════════════════
+function kitchen() {
+  const g = geom(440, 190, 1160, 640);
+  const tiles = () => {
+    let s = `<g clip-path="url(#c-back)">`;
+    for (let y = 400; y < 500; y += 24) for (let x = 440 + ((y / 24) % 2) * 14; x < 1160; x += 28)
+      s += `<rect x="${x}" y="${y}" width="27" height="23" fill="#6f7a60" opacity="${0.35 + ((x * y) % 7) / 40}"/>`;
+    return s + '</g>';
+  };
+  const base = `
+  ${FILTERS}
+  ${shell(g, { sideFar: '#0b0e09', side: '#2c3324', back: '#38412e', backTop: '#20261a', ceil: '#141810', floor: '#2a2d22', floorNear: '#0b0c08' })}
+  ${checker(g, '#5c5f4c', '#16170f', 9)}
+  ${edges(g, '#0e110b')}
+  ${tiles()}
+
+  <!-- window over the sink -->
+  <rect x="890" y="232" width="190" height="150" fill="#0d1a10"/>
+  <rect x="890" y="232" width="190" height="150" fill="none" stroke="#1a2014" stroke-width="12"/>
+  <line x1="985" y1="232" x2="985" y2="382" stroke="#1a2014" stroke-width="8"/>
+  <path d="M900 380 q 30 -80 50 -120 q 10 40 40 70 q 20 -60 70 -90 v 140z" fill="#040805"/>
+
+  <!-- upper cupboards: one hanging open -->
+  <rect x="470" y="215" width="340" height="160" fill="#2a2214" stroke="#120e08" stroke-width="5"/>
+  <rect x="482" y="228" width="98" height="134" fill="#3a2e1a"/><rect x="595" y="228" width="98" height="134" fill="#050403"/>
+  ${['#6a5a3a', '#4a3a2a', '#7a6a4a', '#3e4a32'].map((c, i) => `<rect x="${605 + i * 21}" y="${300 - (i % 2) * 20}" width="17" height="${46 + (i % 2) * 20}" rx="3" fill="${c}"/>`).join('')}
+  <circle cx="618" cy="262" r="10" fill="#c9c2ae" opacity="0.6"/><circle cx="640" cy="266" r="7" fill="#c9c2ae" opacity="0.5"/>
+  ${poly([[693, 228], [760, 210], [760, 390], [693, 362]], 'fill="#3e311c" stroke="#120e08" stroke-width="4"')}
+  <rect x="705" y="228" width="98" height="134" fill="#3a2e1a" opacity="0"/>
+  <rect x="708" y="228" width="92" height="0"/>
+  <rect x="704" y="228" width="98" height="134" fill="none"/>
+  <rect x="806" y="228" width="0" height="0"/>
+  <circle cx="570" cy="300" r="4" fill="#8a7040"/>
+
+  <!-- counter run with drawers -->
+  <rect x="440" y="480" width="720" height="22" fill="#4a4a3a"/>
+  <rect x="440" y="500" width="720" height="140" fill="#2a2214"/>
+  ${[460, 620, 780, 940].map((x) => `<rect x="${x}" y="512" width="146" height="48" fill="#33291a" stroke="#120e08" stroke-width="3"/><rect x="${x}" y="570" width="146" height="62" fill="#33291a" stroke="#120e08" stroke-width="3"/><rect x="${x + 58}" y="532" width="30" height="5" fill="#0e0b07"/>`).join('')}
+  <!-- the locked drawer: brass lock catching the light -->
+  <rect x="780" y="512" width="146" height="48" fill="#3c301c" stroke="#a88a3a" stroke-width="2"/>
+  <rect x="842" y="525" width="22" height="22" rx="3" fill="#b8963e"/><rect x="851" y="531" width="4" height="10" fill="#2a1e08"/>
+  <circle cx="853" cy="536" r="30" fill="url(#glow-warm)" opacity="0.35"/>
+  <!-- sink + tap -->
+  <rect x="940" y="478" width="160" height="10" fill="#7d8070"/>
+  <path d="M1012 478 v -46 q 0 -14 14 -14 h 26 v 10" stroke="#8d9080" stroke-width="7" fill="none"/>
+  <rect x="955" y="468" width="20" height="10" fill="#111"/>
+
+  <!-- fridge on the right -->
+  ${poly([[1210, 250], [1400, 210], [1400, 790], [1210, 730]], 'fill="#a7a78e"')}
+  ${poly([[1210, 250], [1400, 210], [1400, 790], [1210, 730]], 'fill="url(#s-r)" opacity="0.7"')}
+  ${poly([[1170, 262], [1210, 250], [1210, 730], [1170, 700]], 'fill="#5a5a48"')}
+  <line x1="1210" y1="430" x2="1400" y2="404" stroke="#3a3a2e" stroke-width="4"/>
+  <rect x="1226" y="300" width="8" height="90" rx="3" fill="#4a4a3a"/>
+  <!-- note stuck on the fridge -->
+  <g transform="rotate(-5 1310 330)"><rect x="1282" y="300" width="58" height="66" fill="#e2dcc0"/><rect x="1304" y="294" width="14" height="12" fill="#b03030"/>
+    <path d="M1290 318 h 40 M1290 328 h 34 M1290 338 h 38 M1290 348 h 22" stroke="#3a3020" stroke-width="2"/></g>
+  <path d="M1250 600 q 20 40 10 90 M1330 560 q 30 60 -6 140" stroke="#5a2a10" stroke-width="7" fill="none" opacity="0.5"/>
+
+  <!-- table + chairs in the foreground -->
+  <ellipse cx="380" cy="850" rx="300" ry="40" fill="#000" opacity="0.8" filter="url(#b20)"/>
+  ${poly([[150, 690], [560, 690], [620, 760], [80, 760]], 'fill="#1e150c"')}
+  <rect x="80" y="760" width="540" height="18" fill="#120c07"/>
+  <rect x="110" y="776" width="16" height="124" fill="#0a0704"/><rect x="580" y="776" width="16" height="124" fill="#0a0704"/>
+  <path d="M640 900 v -260 h 18 v 150 h 90 v -150 h 18 v 260" fill="#080604"/>
+  <rect x="640" y="780" width="126" height="16" fill="#0c0905"/>
+  <!-- a plate, something rotting -->
+  <ellipse cx="330" cy="722" rx="56" ry="14" fill="#b8b2a0"/><ellipse cx="330" cy="718" rx="30" ry="7" fill="#3a2a10"/>
+
+  <!-- hanging lamp -->
+  <line x1="800" y1="0" x2="800" y2="110" stroke="#050505" stroke-width="3"/>
+  <path d="M758 150 h 84 l -16 -40 h -52z" fill="#1c2416"/>
+  <ellipse cx="800" cy="152" rx="20" ry="7" fill="#f2ffd8"/>
+  ${poly([[770, 155], [830, 155], [1040, 640], [560, 640]], 'fill="#d8f0b0" opacity="0.07" filter="url(#b20)"')}
+  <ellipse cx="800" cy="650" rx="330" ry="70" fill="#d8f0b0" opacity="0.08" filter="url(#b40)"/>
+  ${weather(1, 0.55)}
+  <rect width="${W}" height="${H}" fill="#2a3a10" opacity="0.10" style="mix-blend-mode:multiply"/>
+  <rect width="${W}" height="${H}" fill="url(#vig)"/>`;
+
+  const fx = `
+  <defs>${FILTERS.match(/<radialGradient id="glow-sick"[\s\S]*?<\/radialGradient>/)[0]}</defs>
+  <circle class="fx-flicker" cx="800" cy="160" r="420" fill="url(#glow-sick)" opacity="0.55"/>
+  <rect class="fx-dim" width="${W}" height="${H}" fill="#000"/>
+  <ellipse class="fx-drip" cx="965" cy="482" rx="2.5" ry="4" fill="#cfe0d0"/>
+  ${motes(10, 800, 420, 420, 360)}`;
+  return { base: wrap(base), fx: wrap(fx) };
+}
+
+// ═════════════════════ BASEMENT ═════════════════════
+function basement() {
+  const g = geom(470, 210, 1130, 650);
+  const steps = Array.from({ length: 9 }, (_, i) => {
+    const x = 20 + i * 44, y = 170 + i * 58;
+    return `${poly([[x, y], [x + 150, y + 10], [x + 150, y + 22], [x, y + 14]], 'fill="#3a2c1e"')}${poly([[x, y + 14], [x + 150, y + 22], [x + 150, y + 64], [x, y + 58]], 'fill="#130d08"')}`;
+  }).join('');
+  const base = `
+  ${FILTERS}
+  ${shell(g, { sideFar: '#090c0d', side: '#2a3234', back: '#343d3f', backTop: '#1c2224', ceil: '#0e1112', floor: '#262c2c', floorNear: '#090b0b' })}
+  <!-- cinder block lines -->
+  <g clip-path="url(#c-back)" stroke="#1a2022" stroke-width="3">
+    ${Array.from({ length: 10 }, (_, r) => `<line x1="470" y1="${230 + r * 44}" x2="1130" y2="${230 + r * 44}"/>` +
+      Array.from({ length: 8 }, (_, c) => `<line x1="${470 + c * 88 + (r % 2) * 44}" y1="${230 + r * 44}" x2="${470 + c * 88 + (r % 2) * 44}" y2="${274 + r * 44}"/>`).join('')).join('')}
+  </g>
+  ${edges(g, '#0b0e0f')}
+  <!-- puddle -->
+  <ellipse cx="760" cy="760" rx="210" ry="34" fill="#0b1214"/>
+  <ellipse cx="760" cy="756" rx="160" ry="20" fill="#5a7880" opacity="0.18" filter="url(#b8)"/>
+
+  <!-- pipes -->
+  <g stroke-linecap="round" fill="none">
+    <path d="M0 60 H 1600" stroke="#1d2426" stroke-width="26"/><path d="M0 60 H 1600" stroke="#3b4649" stroke-width="5" transform="translate(0 -6)"/>
+    <path d="M520 60 V 300 H 640" stroke="#1d2426" stroke-width="18"/>
+    <path d="M1250 60 V 900" stroke="#181f21" stroke-width="30"/><path d="M1240 60 V 900" stroke="#3b4649" stroke-width="4"/>
+    ${[200, 480, 760, 1060, 1380].map((x) => `<rect x="${x - 9}" y="40" width="18" height="40" fill="#121718" stroke="none"/>`).join('')}
+  </g>
+
+  <!-- boiler -->
+  <defs><linearGradient id="cyl" x1="0" x2="1"><stop offset="0" stop-color="#0c0f10"/><stop offset="0.35" stop-color="#3a4446"/><stop offset="0.6" stop-color="#20282a"/><stop offset="1" stop-color="#070909"/></linearGradient></defs>
+  <ellipse cx="1050" cy="680" rx="140" ry="20" fill="#000" opacity="0.8" filter="url(#b8)"/>
+  <rect x="940" y="320" width="220" height="360" rx="30" fill="url(#cyl)"/>
+  <ellipse cx="1050" cy="322" rx="110" ry="22" fill="#2c3537"/>
+  <path d="M1050 300 V 60" stroke="#1d2426" stroke-width="30"/>
+  <rect x="995" y="540" width="110" height="70" rx="6" fill="#120806"/>
+  ${[0, 1, 2, 3, 4].map((i) => `<rect x="${1003 + i * 21}" y="548" width="11" height="54" fill="#ff6a20" opacity="0.8"/>`).join('')}
+  <circle cx="1050" cy="400" r="22" fill="#0c0f10" stroke="#4a5456" stroke-width="5"/><line x1="1050" y1="400" x2="1062" y2="388" stroke="#c33" stroke-width="3"/>
+
+  <!-- shelves with jars (right wall) -->
+  ${[0.32, 0.5, 0.68].map((v) => poly(g.wallQuadR(1300, 1560, v, v + 0.02), 'fill="#2a1e14"')).join('')}
+  ${[0.32, 0.5, 0.68].map((v, r) => [1320, 1380, 1440, 1500].map((x, i) => { const y = g.ry(x, v); return `<rect x="${x}" y="${y - 52 + (i % 2) * 8}" width="34" height="${52 - (i % 2) * 8}" rx="5" fill="${['#4a3a20', '#3a4a2a', '#5a2a1a', '#2a3a3a'][(i + r) % 4]}" opacity="0.85"/><rect x="${x + 3}" y="${y - 60 + (i % 2) * 8}" width="28" height="8" fill="#555"/>`; }).join('')).join('')}
+
+  <!-- workbench + pegboard -->
+  <rect x="540" y="300" width="330" height="190" fill="#3a2e1e"/>
+  ${Array.from({ length: 70 }, (_, i) => `<circle cx="${552 + (i % 14) * 23}" cy="${314 + Math.floor(i / 14) * 34}" r="2.5" fill="#1a130b"/>`).join('')}
+  <path d="M580 330 h 20 v 90 h -20z M620 330 l 30 0 -6 120 -18 0z" fill="#0d0b09"/>
+  <path d="M700 340 l 60 0 0 16 -50 0 0 80 -10 0z" fill="#0d0b09"/>
+  <path d="M790 330 q 30 30 0 60 q -30 -30 0 -60z" fill="#0d0b09"/>
+  <rect x="830" y="330" width="10" height="100" fill="#0d0b09" opacity="0.4" stroke="#6a5a40" stroke-dasharray="4 4"/>
+  ${poly([[520, 500], [890, 500], [920, 540], [490, 540]], 'fill="#4a3824"')}
+  <rect x="490" y="540" width="430" height="18" fill="#2a1e12"/>
+  <rect x="505" y="558" width="18" height="110" fill="#1a120a"/><rect x="890" y="558" width="18" height="110" fill="#1a120a"/>
+  <!-- bolt cutters on the bench -->
+  <g transform="rotate(-8 700 515)"><path d="M610 520 L 760 508" stroke="#b02a1a" stroke-width="10" stroke-linecap="round"/><path d="M612 532 L 760 516" stroke="#b02a1a" stroke-width="10" stroke-linecap="round"/>
+    <path d="M760 508 L 810 500 M760 516 L 812 512" stroke="#8a8f90" stroke-width="12" stroke-linecap="round"/></g>
+  <rect x="540" y="510" width="40" height="18" fill="#6a6040" opacity="0.6"/>
+
+  <!-- padlocked toolbox -->
+  <ellipse cx="890" cy="812" rx="150" ry="18" fill="#000" opacity="0.8" filter="url(#b8)"/>
+  ${poly([[780, 720], [990, 720], [1020, 740], [810, 740]], 'fill="#a03018"')}
+  <rect x="780" y="720" width="0" height="0"/>
+  ${poly([[780, 720], [810, 740], [810, 810], [780, 790]], 'fill="#5a1a0c"')}
+  <rect x="810" y="740" width="210" height="70" fill="#7a2410"/>
+  <rect x="810" y="760" width="210" height="4" fill="#3a1206"/>
+  <path d="M870 728 q 45 -26 90 0" stroke="#222" stroke-width="8" fill="none"/>
+  <path d="M905 748 q 10 -22 20 0" stroke="#9a9a9a" stroke-width="5" fill="none"/>
+  <rect x="898" y="748" width="34" height="30" rx="5" fill="#b8963e"/><circle cx="915" cy="762" r="4" fill="#2a1e08"/>
+
+  <!-- stairs coming down from the house -->
+  ${steps}
+  <path d="M10 120 L 440 640" stroke="#1e160e" stroke-width="12"/>
+  ${Array.from({ length: 9 }, (_, i) => `<line x1="${40 + i * 46}" y1="${156 + i * 55}" x2="${40 + i * 46}" y2="${210 + i * 55}" stroke="#1e160e" stroke-width="6"/>`).join('')}
+  ${poly([[20, 690], [440, 690], [440, 900], [0, 900]], 'fill="#030404"')}
+  ${watcher(250, 700, 1.05)}
+
+  <!-- dead bulb on a pull chain -->
+  ${bulb(780, 60, 170, 'glow-warm', false)}
+  <line x1="790" y1="200" x2="790" y2="280" stroke="#3a3a3a" stroke-width="2" stroke-dasharray="3 3"/>
+  ${weather(1, 0.6)}
+  <rect width="${W}" height="${H}" fill="#001018" opacity="0.18" style="mix-blend-mode:multiply"/>
+  <rect width="${W}" height="${H}" fill="url(#vig)"/>`;
+
+  const fx = `
+  <defs>${FILTERS.match(/<radialGradient id="glow-ember"[\s\S]*?<\/radialGradient>/)[0]}</defs>
+  <circle class="fx-pulse" cx="1050" cy="575" r="260" fill="url(#glow-ember)"/>
+  <ellipse class="fx-pulse" cx="1050" cy="700" rx="300" ry="60" fill="#ff6a20" opacity="0.12"/>
+  <ellipse class="fx-drip" style="--fall:660px" cx="700" cy="80" rx="3" ry="5" fill="#9fb8c0"/>`;
+  return { base: wrap(base), fx: wrap(fx) };
+}
+
+// ═════════════════════ FOYER ═════════════════════
+function foyer() {
+  const g = geom(460, 170, 1140, 650);
+  const stairs = Array.from({ length: 11 }, (_, i) => {
+    const x = 30 + i * 36, y = 860 - i * 52;
+    return `${poly([[x, y], [x + 260 - i * 8, y - 8], [x + 260 - i * 8, y + 6], [x, y + 14]], 'fill="#3a1c12"')}${poly([[x, y + 14], [x + 260 - i * 8, y + 6], [x + 260 - i * 8, y + 52], [x, y + 60]], 'fill="#160906"')}`;
+  }).reverse().join('');
+  const base = `
+  ${FILTERS}
+  ${shell(g, { sideFar: '#120605', side: '#3c1814', back: '#4a1c18', backTop: '#26100e', ceil: '#140807', floor: '#2a1e18', floorNear: '#080505' })}
+  ${wallpaper('wp-foy', '#a04a3a', 0.16)}
+  ${checker(g, '#8a7e68', '#0e0a08', 8)}
+  ${edges(g, '#100605')}
+
+  <!-- rug -->
+  ${poly([[g.fx(690, 660), 660], [g.fx(910, 660), 660], [g.fx(930, 820), 820], [g.fx(670, 820), 820]], 'fill="#4a0e0e"')}
+  ${poly([[g.fx(705, 668), 668], [g.fx(895, 668), 668], [g.fx(912, 808), 808], [g.fx(688, 808), 808]], 'fill="none" stroke="#9a6a2a" stroke-width="3" opacity="0.6"')}
+
+  <!-- the front door -->
+  <rect x="660" y="230" width="280" height="420" fill="#1a0a07"/>
+  <path d="M680 330 a 120 100 0 0 1 240 0z" fill="#0a0403"/>
+  <defs><clipPath id="c-fan"><path d="M690 330 a 110 90 0 0 1 220 0z"/></clipPath></defs>
+  <g clip-path="url(#c-fan)">
+    ${[0, 1, 2, 3, 4, 5].map((i) => `<path d="M800 330 L ${800 + Math.cos(Math.PI + i * Math.PI / 6) * 140} ${330 + Math.sin(Math.PI + i * Math.PI / 6) * 140} L ${800 + Math.cos(Math.PI + (i + 1) * Math.PI / 6) * 140} ${330 + Math.sin(Math.PI + (i + 1) * Math.PI / 6) * 140}z" fill="${['#7a1010', '#a0601a', '#5a0a0a', '#8a2a10', '#a0601a', '#7a1010'][i]}" stroke="#0a0403" stroke-width="5"/>`).join('')}
+  </g>
+  <rect x="690" y="340" width="220" height="310" fill="#2a120c"/>
+  ${[[705, 356, 90, 120], [805, 356, 90, 120], [705, 492, 90, 140], [805, 492, 90, 140]].map(([x, y, w, h]) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#220e09" stroke="#140705" stroke-width="5"/><rect x="${x + 6}" y="${y + 6}" width="${w - 12}" height="${h - 12}" fill="none" stroke="#3a1a10" stroke-width="2"/>`).join('')}
+  <!-- deadbolt + knob -->
+  <rect x="872" y="468" width="26" height="34" rx="4" fill="#b8963e"/><circle cx="885" cy="485" r="5" fill="#2a1e08"/>
+  <circle cx="885" cy="530" r="12" fill="#8a7030"/><circle cx="881" cy="526" r="4" fill="#e0c070" opacity="0.6"/>
+  <!-- chain -->
+  <g fill="none" stroke="#9a9a96" stroke-width="5">
+    ${[0, 1, 2, 3, 4, 5].map((i) => i % 2 ? `<ellipse cx="${905 - i * 15}" cy="${436 + i * 9}" rx="5" ry="9"/>` : `<ellipse cx="${905 - i * 15}" cy="${436 + i * 9}" rx="10" ry="5"/>`).join('')}
+  </g>
+  <rect x="904" y="426" width="20" height="16" fill="#6a6a66"/><rect x="814" y="474" width="16" height="12" fill="#6a6a66"/>
+  <!-- red light from the fanlight falling on the floor -->
+  ${poly([[700, 330], [900, 330], [1020, 900], [580, 900]], 'fill="#ff3020" opacity="0.06" filter="url(#b20)" style="mix-blend-mode:screen"')}
+
+  <!-- grandfather clock (right) -->
+  <ellipse cx="1300" cy="822" rx="110" ry="16" fill="#000" opacity="0.8" filter="url(#b8)"/>
+  ${poly([[1240, 260], [1360, 236], [1360, 820], [1240, 800]], 'fill="#1e0e08"')}
+  ${poly([[1210, 270], [1240, 260], [1240, 800], [1210, 790]], 'fill="#0e0604"')}
+  <circle cx="1300" cy="320" r="44" fill="#c9bea0"/><circle cx="1300" cy="320" r="44" fill="none" stroke="#5a4020" stroke-width="7"/>
+  <path d="M1300 320 L 1300 290 M1300 320 L 1322 330" stroke="#1a1008" stroke-width="4"/>
+  ${Array.from({ length: 12 }, (_, i) => `<circle cx="${1300 + Math.cos(i * Math.PI / 6) * 36}" cy="${320 + Math.sin(i * Math.PI / 6) * 36}" r="2.5" fill="#1a1008"/>`).join('')}
+  <rect x="1262" y="400" width="76" height="300" fill="#0a0504"/>
+
+  <!-- coat rack: coats that look like someone standing -->
+  <rect x="1460" y="260" width="12" height="560" fill="#0d0705"/>
+  <path d="M1426 300 h 80" stroke="#0d0705" stroke-width="8"/>
+  <path d="M1440 300 c -30 30 -40 160 -30 300 c 30 10 50 10 70 0 c 6 -130 0 -260 -40 -300z" fill="#1c1210"/>
+  <path d="M1482 300 c 26 40 36 180 26 330 c -20 8 -40 6 -56 -2 c 4 -150 10 -280 30 -328z" fill="#140c0a"/>
+  <ellipse cx="1466" cy="282" rx="34" ry="12" fill="#0d0705"/><rect x="1446" y="252" width="40" height="32" rx="6" fill="#0d0705"/>
+
+  <!-- staircase up into the dark (left) -->
+  ${stairs}
+  <path d="M0 790 L 420 260" stroke="#2a0e08" stroke-width="16"/>
+  ${Array.from({ length: 11 }, (_, i) => `<line x1="${34 + i * 36}" y1="${740 - i * 47}" x2="${34 + i * 36}" y2="${812 - i * 52}" stroke="#2a0e08" stroke-width="6"/>`).join('')}
+  <rect x="0" y="770" width="34" height="130" fill="#2a0e08"/><circle cx="17" cy="766" r="16" fill="#3a1408"/>
+  ${poly([[400, 260], [470, 230], [470, 0], [380, 0]], 'fill="#000" opacity="0.8"')}
+  ${watcher(430, 330, 0.7)}
+
+  <!-- mirror on the left wall -->
+  ${poly(g.wallQuadL(120, 220, 0.25, 0.48), 'fill="#2a2e30" stroke="#5a4020" stroke-width="8"')}
+  ${poly(g.wallQuadL(132, 208, 0.28, 0.45), 'fill="#5a6466" opacity="0.4"')}
+
+  <!-- chandelier silhouette -->
+  <line x1="800" y1="0" x2="800" y2="90" stroke="#050505" stroke-width="4"/>
+  <path d="M720 120 Q 800 160 880 120 M740 110 v 20 M800 100 v 40 M860 110 v 20" stroke="#0a0606" stroke-width="6" fill="none"/>
+  ${[740, 770, 800, 830, 860].map((x, i) => `<circle cx="${x}" cy="${128 + (i % 2) * 10}" r="${i === 2 ? 4 : 3}" fill="#ffcf8a" opacity="${i === 3 ? 0.15 : 0.7}"/>`).join('')}
+  <circle cx="800" cy="130" r="220" fill="url(#glow-warm)" opacity="0.45"/>
+  ${weather(0.8, 0.55)}
+  <rect width="${W}" height="${H}" fill="url(#vig)"/>`;
+
+  const fx = `
+  <g class="fx-pendulum"><line x1="1300" y1="410" x2="1300" y2="600" stroke="#8a6a2a" stroke-width="4"/><circle cx="1300" cy="610" r="18" fill="#b8963e"/></g>
+  <rect x="690" y="642" width="220" height="8" fill="#ffb060" opacity="0.45"/>
+  <rect class="fx-underdoor" x="690" y="642" width="70" height="8" fill="#000"/>
+  <rect class="fx-lightning" x="690" y="240" width="220" height="90" fill="#ffddcc"/>`;
+  return { base: wrap(base), fx: wrap(fx) };
+}
+
+const ROOM_ART = {
+  bedroom: bedroom(),
+  hallway: hallway(),
+  kitchen: kitchen(),
+  basement: basement(),
+  foyer: foyer(),
+};
+
+// Hotspot anchors in the same 1600×900 space as the art
+const ART_SIZE = { w: W, h: H };
+const HOTSPOT_XY = {
+  nightstand:   [900, 584],
+  note:         [590, 652],
+  bed:          [590, 815],
+  linenCloset:  [160, 470],
+  portrait:     [1220, 300],
+  cupboards:    [640, 300],
+  lockedDrawer: [853, 536],
+  fridge:       [1311, 333],
+  workbench:    [705, 430],
+  toolbox:      [915, 765],
+  fumble:       [760, 560],
+  frontDoor:    [800, 470],
+};
+// Back-compat: percentages
+const HOTSPOT_POS = Object.fromEntries(
+  Object.entries(HOTSPOT_XY).map(([k, [x, y]]) => [k, [(x / W) * 100, (y / H) * 100]]));
+
+// ═════════════════════ TITLE SCREEN: the house on the hill ═════════════════════
+const tree = (x, y, s, flip = 1) => `
+  <g transform="translate(${x} ${y}) scale(${s * flip} ${s})" stroke="#020203" stroke-linecap="round" fill="none">
+    <path d="M0 0 C 4 -80 -6 -160 4 -240" stroke-width="16"/>
+    <path d="M2 -120 C 30 -150 60 -160 90 -210 M60 -165 C 80 -170 100 -165 120 -180 M0 -170 C -30 -200 -50 -230 -90 -250 M-50 -220 C -70 -230 -80 -260 -76 -290 M4 -230 C 10 -260 30 -290 20 -330 M-4 -80 C -40 -100 -70 -100 -100 -130" stroke-width="6"/>
+    <path d="M90 -210 l 20 -30 M-90 -250 l -26 -10 M20 -330 l 14 -20 M-100 -130 l -20 4 M120 -180 l 16 4" stroke-width="3"/>
+  </g>`;
+
+const TITLE_ART = wrap(`
+  <defs>
+    <linearGradient id="t-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#03050a"/><stop offset="0.55" stop-color="#18223a"/><stop offset="0.8" stop-color="#2c2a3a"/><stop offset="1" stop-color="#1a1418"/></linearGradient>
+    <radialGradient id="t-moon"><stop offset="0" stop-color="#f2f4fa"/><stop offset="0.08" stop-color="#d9e0ee" stop-opacity="0.9"/><stop offset="0.3" stop-color="#7a8aa8" stop-opacity="0.18"/><stop offset="1" stop-color="#7a8aa8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="t-win"><stop offset="0" stop-color="#ffcf80"/><stop offset="0.3" stop-color="#ff9a40" stop-opacity="0.5"/><stop offset="1" stop-color="#ff7020" stop-opacity="0"/></radialGradient>
+    <filter id="tb20" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="22"/></filter>
+    <filter id="tb6" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="t-grain2" x="0" y="0" width="100%" height="100%" filterUnits="userSpaceOnUse">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="9"/>
+      <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.3 0 0 0 -0.5"/>
+    </filter>
+  </defs>
+  <rect width="${W}" height="${H}" fill="url(#t-sky)"/>
+  <circle cx="1260" cy="190" r="460" fill="url(#t-moon)"/>
+  <circle cx="1260" cy="190" r="58" fill="#e6eaf3"/>
+  <circle cx="1245" cy="178" r="12" fill="#c8cfdd"/><circle cx="1276" cy="208" r="8" fill="#c8cfdd"/>
+  <g filter="url(#tb20)" fill="#2a3040" opacity="0.7" class="fx-cloud">
+    <ellipse cx="1050" cy="240" rx="260" ry="34"/><ellipse cx="1350" cy="170" rx="200" ry="26"/><ellipse cx="400" cy="120" rx="300" ry="40"/>
+  </g>
+  <!-- distant hills -->
+  <path d="M0 640 C 200 590 380 610 560 580 C 760 550 980 600 1200 570 C 1380 550 1500 580 1600 560 V 900 H 0Z" fill="#07080c"/>
+  <g transform="translate(400 -10)">
+  <!-- the house -->
+  <g fill="#020203">
+    <path d="M560 640 V 420 L 640 330 L 720 420 V 640Z"/>
+    <path d="M700 640 V 380 L 820 250 L 940 380 V 640Z"/>
+    <path d="M920 640 V 450 L 1010 380 L 1100 450 V 640Z"/>
+    <rect x="760" y="200" width="30" height="90"/><rect x="980" y="340" width="22" height="70"/>
+    <path d="M640 330 l 0 -60 l 8 0 l 0 60z"/>
+    <rect x="540" y="560" width="580" height="80"/>
+    <path d="M530 560 h 600 l -20 -24 h -560z"/>
+  </g>
+  <!-- windows: all dark except one -->
+  ${[[600, 450], [660, 450], [600, 520], [740, 420], [860, 420], [740, 500], [860, 500], [960, 480], [1040, 480]].map(([x, y]) => `<rect x="${x}" y="${y}" width="34" height="50" fill="#0b0d12"/>`).join('')}
+  <circle cx="817" cy="345" r="120" fill="url(#t-win)" class="t-window-glow"/>
+  <rect x="800" y="320" width="34" height="50" fill="#ffb760" class="t-window"/>
+  <path d="M817 370 v -36 c 0 -8 -10 -8 -10 -2 v -4 c 0 -9 20 -9 20 0 v 4 c 0 -6 -10 -6 -10 2" fill="#1a0a04"/>
+  <rect x="805" y="340" width="24" height="30" fill="#1a0a04" opacity="0.9"/>
+  <ellipse cx="817" cy="333" rx="7" ry="9" fill="#1a0a04"/>
+  <line x1="817" y1="320" x2="817" y2="370" stroke="#020203" stroke-width="3"/><line x1="800" y1="345" x2="834" y2="345" stroke="#020203" stroke-width="3"/>
+  </g>
+  <!-- foreground hill, fence, dead trees -->
+  <path d="M0 720 C 300 660 560 640 820 650 C 1100 660 1350 700 1600 690 V 900 H 0Z" fill="#030304"/>
+  ${Array.from({ length: 26 }, (_, i) => `<rect x="${730 + i * 40}" y="${652 - Math.sin(i / 3) * 6 + (i % 3) * 3}" width="7" height="${40 + (i % 2) * 8}" fill="#030304" transform="rotate(${(i % 5) - 2} ${733 + i * 40} 690)"/>`).join('')}
+  <path d="M720 668 C 1000 650 1300 652 1780 672" stroke="#030304" stroke-width="5" fill="none"/>
+  ${tree(180, 760, 1.5)}${tree(1590, 780, 1.2, -1)}${tree(880, 700, 0.75)}${tree(390, 690, 0.6, -1)}
+  <!-- fog -->
+  <g class="fx-fog" filter="url(#tb20)" fill="#6a7088" opacity="0.18">
+    <ellipse cx="400" cy="700" rx="500" ry="50"/><ellipse cx="1200" cy="720" rx="520" ry="46"/><ellipse cx="800" cy="800" rx="700" ry="60"/>
+  </g>
+  <g class="fx-fog fx-fog-2" filter="url(#tb20)" fill="#8088a0" opacity="0.12">
+    <ellipse cx="700" cy="660" rx="420" ry="34"/><ellipse cx="1400" cy="650" rx="300" ry="30"/>
+  </g>
+  <rect width="${W}" height="${H}" filter="url(#t-grain2)" opacity="0.5"/>
+  <rect width="${W}" height="${H}" fill="url(#vig)"/>
+  <defs>${FILTERS.match(/<radialGradient id="vig"[\s\S]*?<\/radialGradient>/)[0]}</defs>`);
+
+return { ROOM_ART, ART_SIZE, HOTSPOT_XY, HOTSPOT_POS, TITLE_ART };
+})();
+
+/* ── main.js ── */
+__m.main = (() => {
+// ─────────────────────────────────────────────────────────────
+//  Don't Make a Sound — UI layer
+//  Listens to the Game state machine and paints the house.
+// ─────────────────────────────────────────────────────────────
+
+const { Game } = __m.state;
+const { TriviaEngine, validateQuestions } = __m.trivia;
+const { AudioEngine } = __m.audio;
+const store = __m.storage;
+const { ACHIEVEMENTS } = __m.storage;
+const { ROOMS, ITEMS, NOISE, HOTSPOTS, MAX_DAYS, DIFFICULTY } = __m.config;
+const { ROOM_ART, HOTSPOT_POS, TITLE_ART } = __m.art;
+
+const $ = (sel) => document.querySelector(sel);
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const rand = (a, b) => a + Math.random() * (b - a);
+const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+const saved = store.load();
+const audio = new AudioEngine();
+let questions = [];
+let game = null;
+let lastRoom = null;
+let ambientTimer = null;
+let encounterActive = false;
+let pendingEncounter = null;
+let runToken = 0;              // bumps on quit so stale async sequences stop
+
+const el = {
+  body: document.body,
+  scene: $('#scene'),
+  art: $('#room-art'),
+  fx: $('#room-fx'),
+  roomName: $('#room-name'),
+  roomDesc: $('#room-desc'),
+  hotspots: $('#hotspots'),
+  exits: $('#exits'),
+  inventory: $('#inventory'),
+  log: $('#log'),
+  day: $('#day-num'),
+  noiseVal: $('#noise-val'),
+  noiseFill: $('#noise-fill'),
+  noiseMeter: $('#noise-meter'),
+  flashlight: $('#btn-flashlight'),
+  mute: $('#btn-mute'),
+  enc: $('#encounter'),
+  encBox: $('#enc-box'),
+  encTitle: $('#enc-title'),
+  encIntro: $('#enc-intro'),
+  encBody: $('#enc-body'),
+  encProgress: $('#enc-progress'),
+  encQuestion: $('#enc-question'),
+  encOptions: $('#enc-options'),
+  timerFill: $('#timer-fill'),
+  timerNum: $('#timer-num'),
+  jumpscare: $('#jumpscare'),
+  wake: $('#wake'),
+  end: $('#end'),
+  toast: $('#toast'),
+};
+
+// ═════════════ boot ═════════════
+async function boot() {
+  try {
+    // The single-file build embeds the questions; the dev version fetches them
+    const json = window.__QUESTIONS__ ?? (await (await fetch('data/questions.json')).json());
+    questions = json.questions;
+    const errs = validateQuestions(questions);
+    if (errs.length) console.warn('[questions.json]', errs);
+  } catch (err) {
+    console.error(err);
+    $('#btn-start').disabled = true;
+    $('#title-best').textContent =
+      'Could not load the questions. Open the root index.html (the single-file build), or run a local server for src/.';
+    return;
+  }
+  $('#title-art').innerHTML = TITLE_ART;
+  applySettings();
+  renderTitleBest();
+  startStatic();
+  bindGlobalInput();
+}
+
+// ═════════════ screens ═════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
+}
+
+function startRun() {
+  audio.init();
+  audio.setVolume(saved.settings.volume);
+  audio.setMuted(saved.settings.muted);
+  runToken++;
+  el.log.innerHTML = '';
+  lastRoom = null;
+  encounterActive = false;
+  pendingEncounter = null;
+
+  const trivia = new TriviaEngine(questions);
+  game = new Game(trivia, { difficulty: saved.settings.difficulty });
+  game
+    .on('change', render)
+    .on('message', log)
+    .on('sfx', (name) => audio.play(name))
+    .on('noise', onNoise)
+    .on('shake', () => shakeScene(true))
+    .on('item', onItem)
+    .on('encounter', (e) => (encounterActive ? (pendingEncounter = e) : runEncounter(e)));
+
+  // Open the game with ?debug to poke at it from the console: window.game.state
+  if (new URLSearchParams(location.search).has('debug')) window.game = game;
+
+  [el.enc, el.wake, el.end, el.jumpscare].forEach((n) => (n.hidden = true));
+  showScreen('screen-game');
+  el.body.dataset.phase = 'exploring';
+  log('You wake up on a bare mattress. The door is unlocked. Somewhere below, something heavy shifts its weight.', 'day');
+  log(`Difficulty: ${DIFFICULTY[saved.settings.difficulty].label}. Find the keys. Reach the front door. Stay quiet.`, 'dim');
+  render(game.state);
+  onNoise(0, 0);
+  startAmbient();
+}
+
+function quitToTitle() {
+  runToken++;
+  stopAmbient();
+  game = null;
+  encounterActive = false;
+  [el.enc, el.wake, el.end, el.jumpscare].forEach((n) => (n.hidden = true));
+  el.body.dataset.phase = 'title';
+  el.body.dataset.day = '1';
+  audio.setTension(0);
+  renderTitleBest();
+  showScreen('screen-title');
+}
+
+// ═════════════ rendering ═════════════
+function render(state) {
+  if (!game) return;
+  const room = ROOMS[state.currentRoom];
+  el.body.dataset.day = String(state.currentDay);
+  el.day.textContent = state.currentDay;
+
+  if (lastRoom !== state.currentRoom) {
+    el.scene.dataset.room = state.currentRoom;
+    const art = ROOM_ART[state.currentRoom];
+    el.art.innerHTML = art?.base ?? '';
+    el.fx.innerHTML = art?.fx ?? '';
+    lastRoom = state.currentRoom;
+  }
+  const dark = game.isDark();
+  el.scene.classList.toggle('pitch', dark);
+  el.scene.classList.toggle('torch', !!room.dark && state.flashlightOn);
+  el.roomName.textContent = room.name;
+  el.roomDesc.textContent = dark ? room.darkDesc : room.desc;
+
+  // hotspots
+  el.hotspots.innerHTML = '';
+  for (const h of game.visibleHotspots()) {
+    const b = document.createElement('button');
+    b.className = 'hotspot' + (h.status === 'used' ? ' used' : '');
+    const [x, y] = HOTSPOT_POS[h.id] ?? [50, 50];
+    b.style.left = `${x}%`;
+    b.style.top = `${y}%`;
+    b.setAttribute('aria-label', h.label);
+    const ring = document.createElement('span');
+    ring.className = 'ring';
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = h.label;
+    const cost = costHint(h);
+    if (cost) {
+      const c = document.createElement('span');
+      c.className = 'cost';
+      c.textContent = cost;
+      label.append(c);
+    }
+    b.append(ring, label);
+    b.addEventListener('click', () => game?.interact(h.id));
+    el.hotspots.append(b);
+  }
+
+  // exits (+ the room's actions, shown here on small screens)
+  el.exits.innerHTML = '';
+  for (const h of game.visibleHotspots()) {
+    const b = document.createElement('button');
+    b.className = 'exit action' + (h.status === 'used' ? ' used' : '');
+    b.textContent = h.label;
+    b.addEventListener('click', () => game?.interact(h.id));
+    el.exits.append(b);
+  }
+  for (const x of game.exits()) {
+    const b = document.createElement('button');
+    b.className = 'exit' + (x.locked ? ' locked' : '');
+    b.textContent = x.name;
+    b.title = x.locked ? 'Locked' : `Go to ${x.name}`;
+    b.addEventListener('click', () => game?.move(x.id));
+    el.exits.append(b);
+  }
+
+  // inventory
+  el.inventory.innerHTML = state.inventory.length
+    ? state.inventory.map((i) => `<li data-item="${i}">${ITEMS[i].name}<small>${ITEMS[i].desc}</small></li>`).join('')
+    : '<li class="empty">Nothing. Just shaking hands.</li>';
+
+  el.flashlight.disabled = !game.has('flashlight');
+  el.flashlight.classList.toggle('on', state.flashlightOn);
+}
+
+function costHint(h) {
+  if (h.status === 'used' && h.type !== 'read') return '';
+  switch (h.type) {
+    case 'search': return `+${NOISE.search}%`;
+    case 'smash': return game.has(h.requires) ? `+${NOISE.loudTool}%` : '';
+    case 'hide': return game.state.hideUsed ? '' : `${NOISE.hideRelief}%`;
+    case 'fumble': return `+${NOISE.fumbleDark}%`;
+    case 'lockpick': return 'pick lock';
+    default: return '';
+  }
+}
+
+function log(text, kind = '') {
+  const li = document.createElement('li');
+  li.textContent = text;
+  if (kind) li.className = kind;
+  el.log.prepend(li);
+  while (el.log.children.length > 14) el.log.lastElementChild.remove();
+}
+
+function onNoise(level, delta) {
+  el.noiseFill.style.width = `${level}%`;
+  el.noiseVal.textContent = `${level}%`;
+  el.noiseMeter.setAttribute('aria-valuenow', String(level));
+  el.noiseMeter.classList.toggle('hot', level >= 75);
+  if (delta > 0) {
+    el.noiseMeter.classList.remove('bump');
+    void el.noiseMeter.offsetWidth;
+    el.noiseMeter.classList.add('bump');
+  }
+  if (delta >= NOISE.search) shakeScene(false);
+  if (game?.state.phase === 'exploring') audio.setTension(level / 100);
+}
+
+function onItem(item) {
+  toast(`Found: ${ITEMS[item].name}`);
+  requestAnimationFrame(() => el.inventory.querySelector(`[data-item="${item}"]`)?.classList.add('new'));
+}
+
+function shakeScene(big) {
+  if (saved.settings.reducedMotion) return;
+  const cls = big ? 'shake-big' : 'shake';
+  el.scene.classList.remove('shake', 'shake-big');
+  void el.scene.offsetWidth;
+  el.scene.classList.add(cls);
+}
+
+let toastTimer;
+function toast(text) {
+  el.toast.textContent = text;
+  el.toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.toast.classList.remove('show'), 2600);
+}
+
+// ═════════════ ambience: the house is alive ═════════════
+function startAmbient() {
+  stopAmbient();
+  const tick = () => {
+    if (!game || game.state.phase !== 'exploring') return;
+    const n = game.state.noiseLevel;
+    const day = game.state.currentDay;
+    const roll = Math.random();
+    if (n >= 35 && roll < 0.35 + n / 160) {
+      // the pursuer roaming the house — closer the louder you've been
+      const steps = 2 + Math.floor(Math.random() * 3);
+      const pan = rand(-0.9, 0.9);
+      for (let i = 0; i < steps; i++) audio.footstep(0.04 + (n / 100) * 0.3, pan, i * 0.6);
+    } else if (roll < 0.55) {
+      audio.play('creak');
+    }
+    if (day >= 3 && Math.random() < 0.12 * (day - 2)) audio.play('whisper');
+    if (el.scene.classList.contains('torch') && Math.random() < 0.15 * day) {
+      el.scene.classList.add('flicker');
+      setTimeout(() => el.scene.classList.remove('flicker'), 600);
+    }
+    ambientTimer = setTimeout(tick, rand(3500, 8500) / (1 + day * 0.1));
+  };
+  ambientTimer = setTimeout(tick, 3000);
+}
+function stopAmbient() { clearTimeout(ambientTimer); }
+
+// ═════════════ encounters ═════════════
+const ENC_COPY = {
+  pursuit: { title: 'It heard you' },
+  lockpick: { title: 'Picking the lock' },
+  standoff: { title: 'The front door' },
+};
+
+let timerRAF = null;
+let answered = false;
+
+async function runEncounter(e) {
+  const token = runToken;
+  encounterActive = true;
+  stopAmbient();
+  el.body.dataset.phase = 'encounter';
+  el.enc.hidden = false;
+  el.enc.className = `overlay encounter ${e.kind}`;
+  el.enc.dataset.room = e.room;
+  el.encTitle.textContent = ENC_COPY[e.kind].title;
+  el.encBody.hidden = true;
+  el.encIntro.hidden = false;
+  el.encBox.classList.remove('shaking');
+  el.encBox.style.setProperty('--shake', '0px');
+
+  const intro = async (text, ms) => {
+    el.encIntro.textContent = text;
+    await wait(ms);
+    return token === runToken;
+  };
+
+  if (e.kind === 'pursuit') {
+    audio.setTension(0.9);
+    audio.play('stinger');
+    const dur = audio.approach(6, 0.5, 0.1, 0.95) * 1000;
+    if (!(await intro('Heavy footsteps. Coming fast. Coming here.', 1300))) return;
+    if (!(await intro(`You throw yourself ${e.hideSpot} and press a hand over your mouth.`, dur - 1100))) return;
+    if (!(await intro('The footsteps stop. Right outside. Breathing.', 900))) return;
+  } else if (e.kind === 'lockpick') {
+    audio.setTension(0.6);
+    if (!(await intro('You slide a bent hairpin into the lock. Slowly. Every scrape is deafening.', 1500))) return;
+  } else {
+    audio.setTension(1);
+    audio.play('stinger');
+    if (!(await intro('Chain cut. Deadbolt turned. Your hand is on the handle —', 1500))) return;
+    audio.approach(4, 0.35, 0.5, 1);
+    if (!(await intro('— and behind you, on the stairs, something starts to laugh.', 1600))) return;
+  }
+  el.encIntro.textContent = '';
+  el.encIntro.hidden = true;
+  el.encBody.hidden = false;
+  askQuestion(token);
+}
+
+function askQuestion(token) {
+  const e = game.state.encounter;
+  const q = game.currentQuestion;
+  answered = false;
+  el.encProgress.textContent = `QUESTION ${e.index + 1} / ${e.questions.length}`;
+  el.encQuestion.textContent = q.question;
+  el.encOptions.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const b = document.createElement('button');
+    b.className = 'enc-opt';
+    b.dataset.i = i;
+    b.innerHTML = `<span class="num">${i + 1}</span><span></span>`;
+    b.lastChild.textContent = opt;
+    b.addEventListener('click', () => submitAnswer(i, token));
+    el.encOptions.append(b);
+  });
+  el.encBox.setAttribute('tabindex', '-1');
+  el.encBox.focus({ preventScroll: true });
+
+  const total = e.seconds * 1000;
+  const start = performance.now();
+  const hostile = e.kind !== 'lockpick';
+  let lastSecond = e.seconds;
+  let nextStep = start + 1400;
+  if (!saved.settings.reducedMotion) el.encBox.classList.add('shaking');
+
+  const frame = (now) => {
+    if (answered || token !== runToken) return;
+    const elapsed = now - start;
+    const left = Math.max(0, total - elapsed);
+    const k = elapsed / total;
+    el.timerFill.style.transform = `scaleX(${left / total})`;
+    const secs = Math.ceil(left / 1000);
+    el.timerNum.textContent = secs;
+    el.timerNum.classList.toggle('panic', secs <= 3);
+    el.encBox.style.setProperty('--shake', `${(hostile ? 1 + k * 9 : 0.5 + k * 2).toFixed(2)}px`);
+    if (secs < lastSecond) {
+      lastSecond = secs;
+      if (secs <= 3) audio.play('tick');
+    }
+    if (hostile && now >= nextStep) {
+      audio.footstep(0.35 + k * 0.55, rand(-0.4, 0.4));
+      nextStep = now + 1600 - k * 900;
+    }
+    if (left <= 0) return submitAnswer(-1, token);
+    timerRAF = requestAnimationFrame(frame);
+  };
+  timerRAF = requestAnimationFrame(frame);
+}
+
+async function submitAnswer(choice, token) {
+  if (answered || !game || token !== runToken) return;
+  answered = true;
+  cancelAnimationFrame(timerRAF);
+  el.encBox.classList.remove('shaking');
+
+  const res = game.answer(choice);
+  if (!res) return;
+  [...el.encOptions.children].forEach((b, i) => {
+    b.disabled = true;
+    if (i === res.correctIndex) b.classList.add('right');
+    if (i === choice && !res.correct) b.classList.add('wrong');
+  });
+  if (choice === -1) el.encProgress.textContent = 'TOO SLOW';
+  audio.play(res.correct ? 'correct' : 'wrong');
+
+  await wait(res.correct ? 600 : 1100);
+  if (token !== runToken) return;
+  if (!res.done) return askQuestion(token);
+  closeEncounter(res.outcome, token);
+}
+
+async function closeEncounter(outcome, token) {
+  el.enc.hidden = true;
+  encounterActive = false;
+
+  switch (outcome) {
+    case 'escaped':
+      toast('It walked away.');
+      afterEncounter();
+      break;
+    case 'unlocked':
+    case 'lockFailed':
+      afterEncounter();
+      break;
+    case 'caught':
+    case 'gameover':
+      await jumpScare(token);
+      if (token !== runToken) return;
+      if (store.unlockNow(saved, 'firstBlood')) toast(`Achievement: ${ACHIEVEMENTS.firstBlood.name}`);
+      outcome === 'caught' ? showWake() : showEnd();
+      break;
+    case 'won':
+      audio.setTension(0);
+      audio.play('door');
+      await wait(900);
+      if (token === runToken) showEnd();
+      break;
+  }
+}
+
+function afterEncounter() {
+  el.body.dataset.phase = 'exploring';
+  if (pendingEncounter) {
+    const next = pendingEncounter;
+    pendingEncounter = null;
+    return runEncounter(next);
+  }
+  audio.setTension(game.state.noiseLevel / 100);
+  startAmbient();
+}
+
+async function jumpScare(token) {
+  stopAmbient();
+  el.body.dataset.phase = 'caught';
+  el.jumpscare.hidden = false;
+  audio.play('jumpscare', { gentle: saved.settings.reducedMotion });
+  await wait(1350);
+  if (token === runToken) el.jumpscare.hidden = true;
+}
+
+const WAKE_TEXT = {
+  2: 'It dragged you back to bed. It wants you to try again.',
+  3: 'Your wrists are bruised. Someone sang to you while you slept.',
+  4: 'There are scratch marks on the inside of the door. Some of them are yours.',
+  5: 'Last chance. It’s done playing.',
+};
+
+function showWake() {
+  const next = game.state.currentDay + 1;
+  $('#wake-day').textContent = `DAY ${next}`;
+  $('#wake-text').textContent = WAKE_TEXT[next] ?? 'You wake again.';
+  el.wake.hidden = false;
+  audio.setTension(0.2);
+  setTimeout(() => $('#btn-wake').focus(), 50);
+}
+
+function wakeUp() {
+  el.wake.hidden = true;
+  game.wake();
+  el.body.dataset.phase = 'exploring';
+  lastRoom = null;
+  render(game.state);
+  startAmbient();
+}
+
+function showEnd() {
+  stopAmbient();
+  const s = game.summary();
+  const { unlocked, newBest } = store.recordRun(saved, s);
+  el.end.hidden = false;
+  el.end.classList.toggle('won', s.won);
+  el.end.classList.toggle('lost', !s.won);
+  el.body.dataset.phase = s.won ? 'won' : 'gameover';
+
+  const title = $('#end-title');
+  title.textContent = s.won ? 'YOU ESCAPED' : 'YOU NEVER LEFT';
+  title.dataset.text = title.textContent;
+  $('#end-text').textContent = s.won
+    ? (s.day === 1 && s.pursuitsSurvived === 0 ? 'Not a single sound. It never even knew you were gone.'
+      : s.day === 1 ? 'It came looking — more than once — but it never found you. Cold air. Freedom.' : `Day ${s.day}. Cold air on your face. Behind you, the door slams — and locks itself.`)
+    : 'Five days. It was patient. The bedroom door locks from the outside now.';
+
+  const rows = [
+    ['Score', `${s.score.toLocaleString()}${newBest ? '  ★ new best' : ''}`],
+    ['Day reached', `${s.day} / ${MAX_DAYS}`],
+    ['Questions right', `${s.correct}`],
+    ['Questions wrong', `${s.wrong}`],
+    ['Pursuits survived', `${s.pursuitsSurvived}`],
+    ['Time', fmtTime(s.seconds)],
+    ['Difficulty', DIFFICULTY[s.difficulty].label],
+  ];
+  $('#end-stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  $('#end-unlocks').innerHTML = unlocked
+    .map((id) => `<div class="unlock">Achievement unlocked — <strong>${ACHIEVEMENTS[id].name}</strong><br><small>${ACHIEVEMENTS[id].desc}</small></div>`)
+    .join('');
+  setTimeout(() => $('#btn-again').focus(), 50);
+}
+
+// ═════════════ title, panels, settings ═════════════
+function renderTitleBest() {
+  const st = saved.stats;
+  const parts = [];
+  if (st.bestScore) parts.push(`Best score ${st.bestScore.toLocaleString()}`);
+  if (st.fastestEscape !== null) parts.push(`Fastest escape ${fmtTime(st.fastestEscape)}`);
+  if (st.runs) parts.push(`${st.escapes} escape${st.escapes === 1 ? '' : 's'} in ${st.runs} run${st.runs === 1 ? '' : 's'}`);
+  $('#title-best').textContent = parts.join('  ·  ');
+}
+
+function renderAchievements() {
+  const st = saved.stats;
+  $('#stats-list').innerHTML = [
+    ['Best score', st.bestScore.toLocaleString()],
+    ['Fastest escape', st.fastestEscape === null ? '—' : fmtTime(st.fastestEscape)],
+    ['Escapes / runs', `${st.escapes} / ${st.runs}`],
+    ['Times caught', st.deaths],
+    ['Questions answered right', st.totalCorrect],
+  ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  $('#ach-list').innerHTML = Object.entries(ACHIEVEMENTS)
+    .map(([id, a]) => `<li class="${saved.achievements[id] ? 'got' : ''}"><strong>${saved.achievements[id] ? a.name : '???'}</strong><span>${a.desc}</span></li>`)
+    .join('');
+}
+
+function applySettings() {
+  const s = saved.settings;
+  document.querySelectorAll('input[name=difficulty]').forEach((r) => (r.checked = r.value === s.difficulty));
+  $('#set-volume').value = s.volume;
+  $('#set-reduced').checked = s.reducedMotion;
+  el.body.classList.toggle('reduced', s.reducedMotion);
+  el.mute.classList.toggle('on', !s.muted);
+  el.mute.textContent = '';
+  el.mute.append(s.muted ? 'Muted ' : 'Sound ');
+  const k = document.createElement('kbd'); k.textContent = 'M'; el.mute.append(k);
+  audio.setVolume(s.volume);
+  audio.setMuted(s.muted);
+}
+
+function openPanel(id) {
+  if (id === 'panel-achievements') renderAchievements();
+  const p = document.getElementById(id);
+  p.hidden = false;
+  p.querySelector('button, input')?.focus();
+}
+function closePanels() {
+  document.querySelectorAll('.panel').forEach((p) => (p.hidden = true));
+}
+
+// ═════════════ input ═════════════
+function bindGlobalInput() {
+  $('#btn-start').addEventListener('click', startRun);
+  $('#btn-again').addEventListener('click', startRun);
+  $('#btn-title').addEventListener('click', quitToTitle);
+  $('#btn-quit').addEventListener('click', quitToTitle);
+  $('#btn-wake').addEventListener('click', wakeUp);
+  el.flashlight.addEventListener('click', () => game?.toggleFlashlight());
+  el.mute.addEventListener('click', toggleMute);
+
+  document.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openPanel(b.dataset.open)));
+  document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closePanels));
+  document.querySelectorAll('.panel').forEach((p) => p.addEventListener('click', (ev) => { if (ev.target === p) closePanels(); }));
+
+  document.querySelectorAll('input[name=difficulty]').forEach((r) =>
+    r.addEventListener('change', () => { saved.settings.difficulty = r.value; store.save(saved); }));
+  $('#set-volume').addEventListener('input', (ev) => {
+    saved.settings.volume = Number(ev.target.value);
+    audio.setVolume(saved.settings.volume);
+    store.save(saved);
+  });
+  $('#set-reduced').addEventListener('change', (ev) => {
+    saved.settings.reducedMotion = ev.target.checked;
+    store.save(saved);
+    applySettings();
+  });
+  $('#btn-reset').addEventListener('click', () => {
+    store.resetProgress(saved);
+    renderTitleBest();
+    toast('Progress wiped. The house forgets you.');
+  });
+
+  // Flashlight / cursor position
+  const track = (x, y) => {
+    document.documentElement.style.setProperty('--mx', `${x}px`);
+    document.documentElement.style.setProperty('--my', `${y}px`);
+    const r = el.scene.getBoundingClientRect();
+    el.scene.style.setProperty('--mx', `${x - r.left}px`);
+    el.scene.style.setProperty('--my', `${y - r.top}px`);
+  };
+  window.addEventListener('pointermove', (ev) => track(ev.clientX, ev.clientY), { passive: true });
+  window.addEventListener('pointerdown', (ev) => track(ev.clientX, ev.clientY), { passive: true });
+
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') return closePanels();
+    if (!game) return;
+    if (game.state.phase === 'encounter' && !el.encBody.hidden && !answered) {
+      const n = Number(ev.key);
+      if (n >= 1 && n <= el.encOptions.children.length) {
+        ev.preventDefault();
+        el.encOptions.children[n - 1].click();
+      }
+      return;
+    }
+    if (ev.key === 'f' || ev.key === 'F') game.toggleFlashlight();
+    if (ev.key === 'm' || ev.key === 'M') toggleMute();
+  });
+}
+
+function toggleMute() {
+  saved.settings.muted = !saved.settings.muted;
+  store.save(saved);
+  applySettings();
+}
+
+// ═════════════ TV static ═════════════
+function startStatic() {
+  const c = $('#static');
+  const ctx = c.getContext('2d');
+  c.width = 200;
+  c.height = 120;
+  const img = ctx.createImageData(c.width, c.height);
+  const draw = () => {
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = (Math.random() * 255) | 0;
+      d[i] = d[i + 1] = d[i + 2] = v;
+      d[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  };
+  let last = 0;
+  const loop = (t) => {
+    if (!saved.settings.reducedMotion && t - last > 70) { draw(); last = t; }
+    requestAnimationFrame(loop);
+  };
+  draw();
+  requestAnimationFrame(loop);
+}
+
+boot();
+
+return {  };
+})();
+})();
+</script>
+</body>
+</html>

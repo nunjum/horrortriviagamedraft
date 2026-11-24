@@ -7,6 +7,7 @@
   <meta name="description" content="A browser horror stealth escape game where horror trivia is the only thing keeping you hidden." />
   <meta name="theme-color" content="#050505" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23000'/><circle cx='35' cy='42' r='8' fill='%23b00'/><circle cx='65' cy='42' r='8' fill='%23b00'/></svg>" />
+  <style>html,body{background:#050505;color:#cfc6b2;margin:0}</style>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
@@ -19,6 +20,7 @@
 
   <!-- ═════════════ TITLE ═════════════ -->
   <section id="screen-title" class="screen active" aria-labelledby="game-title">
+    <div class="title-art" id="title-art" aria-hidden="true"></div>
     <div class="title-wrap">
       <p class="kicker">a horror trivia stealth game</p>
       <h1 id="game-title" class="glitch" data-text="DON'T MAKE A SOUND">DON'T MAKE A SOUND</h1>
@@ -58,12 +60,15 @@
 
     <div class="stage">
       <main class="scene" id="scene" data-room="bedroom">
-        <div class="room-art" id="room-art" aria-hidden="true"></div>
+        <div class="frame" id="frame">
+          <div class="room-art" id="room-art" aria-hidden="true"></div>
+          <div class="room-fx" id="room-fx" aria-hidden="true"></div>
+          <div class="hotspots" id="hotspots"></div>
+        </div>
         <div class="room-text">
           <h2 id="room-name">Bedroom</h2>
           <p id="room-desc"></p>
         </div>
-        <div class="hotspots" id="hotspots"></div>
         <nav class="exits" id="exits" aria-label="Doors"></nav>
         <div class="darkness" id="darkness" aria-hidden="true"></div>
       </main>

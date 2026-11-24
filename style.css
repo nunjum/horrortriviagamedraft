@@ -50,11 +50,11 @@ kbd {
 [hidden] { display: none !important; }
 
 /* ── Day-based dread ─────────────────────────────────────── */
-body[data-day="1"] { --static: 0.035; --bloodiness: 0;    --outer: 0.5; }
-body[data-day="2"] { --static: 0.05; --bloodiness: 0.18; --outer: 0.58; }
-body[data-day="3"] { --static: 0.07; --bloodiness: 0.34; --outer: 0.64; }
-body[data-day="4"] { --static: 0.09; --bloodiness: 0.5;  --outer: 0.7; }
-body[data-day="5"] { --static: 0.12; --bloodiness: 0.7;  --outer: 0.76; }
+body[data-day="1"] { --static: 0.035; --bloodiness: 0;    --outer: 0.3; }
+body[data-day="2"] { --static: 0.05; --bloodiness: 0.18; --outer: 0.38; }
+body[data-day="3"] { --static: 0.07; --bloodiness: 0.34; --outer: 0.46; }
+body[data-day="4"] { --static: 0.09; --bloodiness: 0.5;  --outer: 0.54; }
+body[data-day="5"] { --static: 0.12; --bloodiness: 0.7;  --outer: 0.62; }
 body[data-phase="encounter"] { --static: 0.1; }
 
 #static {
@@ -96,7 +96,7 @@ body[data-phase="encounter"] { --static: 0.1; }
 
 /* Title */
 #screen-title {
-  align-items: center; justify-content: center;
+  align-items: center; justify-content: flex-start;
   text-align: center;
   padding: 2rem;
   background:
@@ -223,8 +223,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; }
 .scene.shake { animation: shake 0.4s; }
 .scene.shake-big { animation: shake-big 0.7s; }
 
-.room-art { position: absolute; inset: 0; }
-.room-art svg { width: 100%; height: 100%; display: block; }
 
 .room-text {
   position: absolute; left: 1.6rem; top: 1.2rem; right: 1.6rem;
@@ -234,32 +232,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; }
 }
 #room-name { font-size: 2rem; letter-spacing: 0.04em; }
 #room-desc { color: #a59d8e; margin: 0.4rem 0 0; font-size: 0.9rem; }
-
-.hotspots { position: absolute; inset: 0; z-index: 4; }
-.hotspot {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  background: rgba(5,5,5,0.55);
-  border: 1px dashed rgba(207,198,178,0.35);
-  color: var(--ink);
-  padding: 0.45rem 0.8rem;
-  font-size: 0.82rem;
-  cursor: pointer;
-  letter-spacing: 0.04em;
-  transition: border-color 0.2s, background 0.2s, transform 0.2s;
-  white-space: nowrap;
-}
-.hotspot::before { content: '◦ '; color: var(--red); }
-.hotspot:hover, .hotspot:focus-visible {
-  border-style: solid;
-  border-color: var(--red);
-  background: rgba(60,0,0,0.6);
-  outline: none;
-  transform: translate(-50%, -50%) scale(1.04);
-}
-.hotspot.used { opacity: 0.38; border-color: rgba(207,198,178,0.12); }
-.hotspot.used::before { content: '× '; color: var(--dim); }
-.hotspot .cost { color: var(--dim); font-size: 0.72em; margin-left: 0.4em; }
 
 .exits {
   position: absolute; left: 0; right: 0; bottom: 0;
@@ -306,13 +278,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; }
 }
 .scene.torch.flicker .darkness { animation: flicker 0.25s steps(2) 2; }
 @keyframes flicker { 50% { --outer: 1; opacity: 1; background: #000; } }
-
-/* Room palettes */
-.scene[data-room="bedroom"]  { background: radial-gradient(ellipse at 75% 30%, #1b2230 0%, #0b0d12 45%, #050506 100%); }
-.scene[data-room="hallway"]  { background: radial-gradient(ellipse at 50% 40%, #221a12 0%, #0d0a07 50%, #040303 100%); }
-.scene[data-room="kitchen"]  { background: radial-gradient(ellipse at 50% 15%, #243024 0%, #0c110c 45%, #040504 100%); }
-.scene[data-room="basement"] { background: radial-gradient(ellipse at 40% 60%, #111a1d 0%, #070b0c 50%, #020303 100%); }
-.scene[data-room="foyer"]    { background: radial-gradient(ellipse at 50% 45%, #2a0e0c 0%, #110605 50%, #040202 100%); }
 
 /* Sidebar */
 .side {
@@ -542,11 +507,150 @@ body.reduced .scene.torch.flicker .darkness { animation: none; }
 .scene.pitch #room-desc { color: #6f675b; font-style: italic; }
 
 /* The figure that gets clearer every day you're caught */
-.watcher { opacity: calc(var(--bloodiness) * 0.75); transition: opacity 3s; }
+.watcher { opacity: calc(0.12 + var(--bloodiness) * 0.95); transition: opacity 3s; }
 
 /* HUD + sidebar sit above the vignette/blood so they stay legible */
 .hud, .side { z-index: 45; }
-/* Lift the silhouettes off the background a little */
-.room-art { filter: brightness(2.1) contrast(1.15); }
-.scene[data-room="foyer"] .room-art { filter: brightness(1.8) contrast(1.1); }
 .jumpscare .face { filter: grayscale(0.3) contrast(1.25); }
+
+
+/* ═════════════ Scene frame: art + hotspots share one 16:9 space ═════════════ */
+.scene { container-type: size; background: #000; }
+.frame {
+  position: absolute; left: 50%; top: 50%;
+  width: min(100cqw, 100cqh * 16 / 9);
+  height: min(100cqh, 100cqw * 9 / 16);
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  box-shadow: 0 0 120px 40px #000;
+}
+.room-art, .room-fx { position: absolute; inset: 0; }
+.room-art svg, .room-fx svg { width: 100%; height: 100%; display: block; }
+.room-fx { pointer-events: none; }
+.room-art { animation: room-in 0.9s ease-out; }
+@keyframes room-in { from { opacity: 0; filter: blur(6px) brightness(0.3); } }
+
+/* Hotspots: a pulsing ring on the object + a label */
+.hotspots { position: absolute; inset: 0; z-index: 4; }
+.hotspot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: none; border: 0; padding: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.hotspot .ring {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid rgba(240, 225, 200, 0.75);
+  box-shadow: 0 0 14px rgba(255, 200, 150, 0.45), inset 0 0 8px rgba(255, 200, 150, 0.3);
+  animation: ringpulse 2.6s ease-in-out infinite;
+}
+.hotspot .label {
+  background: rgba(4, 3, 3, 0.78);
+  border: 1px solid rgba(207, 198, 178, 0.22);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem; letter-spacing: 0.05em; white-space: nowrap;
+  opacity: 0.82;
+  transition: opacity 0.2s, border-color 0.2s, background 0.2s;
+}
+.hotspot .cost { color: var(--dim); font-size: 0.85em; margin-left: 0.5em; }
+.hotspot:hover .ring, .hotspot:focus-visible .ring { border-color: var(--red); box-shadow: 0 0 22px rgba(225, 29, 29, 0.8); animation-duration: 0.8s; }
+.hotspot:hover .label, .hotspot:focus-visible .label { opacity: 1; border-color: var(--red); background: rgba(40, 0, 0, 0.85); }
+.hotspot:focus-visible { outline: none; }
+.hotspot.used .ring { animation: none; border-color: rgba(150, 140, 120, 0.3); box-shadow: none; }
+.hotspot.used .label { opacity: 0.4; }
+@keyframes ringpulse { 0%, 100% { transform: scale(0.85); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
+
+/* ═════════════ Living rooms: animated fx layer ═════════════ */
+.fx-rain { animation: rain 0.55s linear infinite; }
+.fx-rain-2 { animation-duration: 0.8s; }
+@keyframes rain { from { transform: translate(0, 0); } to { transform: translate(-14px, 300px); } }
+
+.fx-lightning { opacity: 0; animation: lightning 13s infinite; }
+@keyframes lightning { 0%, 90% { opacity: 0; } 90.6% { opacity: 0.32; } 91.2% { opacity: 0; } 92% { opacity: 0.2; } 93% { opacity: 0; } }
+
+.fx-sway { transform-box: fill-box; transform-origin: 50% 0; animation: sway 5.5s ease-in-out infinite alternate; }
+@keyframes sway { from { transform: rotate(-1.2deg) skewX(-1deg); } to { transform: rotate(1.8deg) skewX(1.5deg); } }
+
+.fx-shadowpass { opacity: 0; animation: shadowpass 16s infinite; }
+@keyframes shadowpass { 0%, 78% { opacity: 0; } 81% { opacity: 0.95; } 86% { opacity: 0.95; } 90%, 100% { opacity: 0; } }
+
+.fx-mote { transform-box: fill-box; animation: mote 12s linear infinite; }
+@keyframes mote { 0% { opacity: 0; transform: translate(0, 0); } 20% { opacity: 0.55; } 80% { opacity: 0.4; } 100% { opacity: 0; transform: translate(38px, -90px); } }
+
+.fx-flicker { animation: bulb 7s infinite; }
+.fx-dim { opacity: 0; animation: dimroom 7s infinite; }
+@keyframes bulb {
+  0%, 40%, 42%, 69%, 73%, 76%, 100% { opacity: 0.9; }
+  41% { opacity: 0.15; } 70% { opacity: 0.05; } 71% { opacity: 0.7; } 72% { opacity: 0.1; } 74.5% { opacity: 0.2; }
+}
+@keyframes dimroom {
+  0%, 40%, 42%, 69%, 73%, 76%, 100% { opacity: 0; }
+  41% { opacity: 0.45; } 70% { opacity: 0.6; } 71% { opacity: 0.1; } 72% { opacity: 0.55; } 74.5% { opacity: 0.4; }
+}
+
+.fx-drip { animation: drip 2.6s ease-in infinite; }
+@keyframes drip { 0%, 30% { transform: translateY(0); opacity: 0; } 35% { opacity: 1; } 95% { transform: translateY(var(--fall, 150px)); opacity: 1; } 100% { transform: translateY(var(--fall, 150px)); opacity: 0; } }
+
+.fx-pulse { animation: ember 3.4s ease-in-out infinite alternate; }
+@keyframes ember { from { opacity: 0.45; } 60% { opacity: 0.9; } 70% { opacity: 0.65; } to { opacity: 1; } }
+
+.fx-pendulum { transform-box: view-box; transform-origin: 1300px 410px; animation: pendulum 1.6s ease-in-out infinite alternate; }
+@keyframes pendulum { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+
+.fx-underdoor { opacity: 0; animation: underdoor 15s linear infinite; }
+@keyframes underdoor { 0%, 70% { opacity: 0; transform: translateX(-60px); } 72% { opacity: 1; } 88% { opacity: 1; transform: translateX(210px); } 90%, 100% { opacity: 0; transform: translateX(210px); } }
+
+body.reduced .room-fx * { animation: none !important; }
+body.reduced .fx-lightning, body.reduced .fx-shadowpass, body.reduced .fx-underdoor, body.reduced .fx-dim { display: none; }
+
+/* ═════════════ Encounter: the view from your hiding spot ═════════════ */
+.encounter .enc-box { background: rgba(0, 0, 0, 0.55); padding: 1.6rem 1.8rem; box-shadow: 0 0 80px 40px rgba(0, 0, 0, 0.6); }
+.encounter[data-room="bedroom"] {     /* under the bed: the slats above, a strip of floor ahead */
+  background:
+    linear-gradient(#000 0 30%, rgba(0,0,0,0) 34%),
+    repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 150px, rgba(0,0,0,0.7) 150px 168px),
+    linear-gradient(rgba(0,0,0,0) 70%, #000 100%),
+    radial-gradient(ellipse 70% 25% at 50% 72%, rgba(150,170,215,0.22), rgba(0,0,0,0.96) 100%);
+}
+.encounter[data-room="hallway"],
+.encounter[data-room="foyer"] {        /* inside a closet: light through the louvres */
+  background:
+    radial-gradient(ellipse 45% 60% at 50% 50%, rgba(0,0,0,0) 0%, #000 100%),
+    repeating-linear-gradient(180deg, #000 0 26px, rgba(255,160,80,0.16) 26px 31px, #000 31px 34px);
+}
+.encounter[data-room="kitchen"] {     /* behind the pantry door: one sliver of sick light */
+  background:
+    linear-gradient(90deg, #000 0 46%, rgba(190,235,150,0.18) 49%, rgba(230,255,200,0.3) 50%, rgba(190,235,150,0.18) 51%, #000 54%),
+    #000;
+}
+.encounter[data-room="basement"] {    /* behind the boiler */
+  background: radial-gradient(circle at 88% 62%, rgba(255,90,20,0.32), rgba(0,0,0,0.97) 55%);
+}
+
+/* ═════════════ Title art ═════════════ */
+.title-art { position: absolute; inset: 0; z-index: 0; }
+.title-art svg { width: 100%; height: 100%; display: block; }
+.title-wrap {
+  position: relative; z-index: 1;
+  padding: 2.2rem 2.6rem;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0) 75%);
+}
+.t-window, .t-window-glow { animation: bulb 9s infinite; }
+.fx-fog { animation: fog 26s ease-in-out infinite alternate; }
+.fx-fog-2 { animation-duration: 34s; animation-direction: alternate-reverse; }
+.fx-cloud { animation: fog 60s ease-in-out infinite alternate; }
+@keyframes fog { from { transform: translateX(-80px); } to { transform: translateX(90px); } }
+body.reduced .title-art * { animation: none !important; }
+.enc-box:focus { outline: none; }
+
+@media (min-width: 1000px) { .title-wrap { margin-left: 6vw; text-align: left; } .title-wrap .menu { align-items: flex-start; } .tagline { margin-left: 0; } }
+/* touch / small screens: the rings stay on the objects, actions move into the bottom bar */
+.exit.action { display: none; }
+@media (max-width: 860px) {
+  .hotspot .label { display: none; }
+  .exit.action { display: inline-block; border-color: #3a1a14; }
+  .exit.action::before { content: '◦ '; color: var(--red); }
+  .exit.action.used { opacity: 0.4; }
+}

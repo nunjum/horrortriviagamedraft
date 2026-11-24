@@ -12,14 +12,14 @@ A high-tension, browser-based stealth escape game where **horror movie and video
 
 ## ▶ Play it
 
-**No build step and no dependencies.** It's plain HTML, CSS and ES-module JavaScript.
+**`index.html` is the whole game in one file.** The CSS, JavaScript, question database and art are all built into it, so it works anywhere:
 
 | Option | How |
 |---|---|
-| **GitHub Pages** | Repo → *Settings* → *Pages* → *Deploy from branch* → `main` / `root`. Your game will be live at `https://<you>.github.io/<repo>/`. |
-| **Local** | `python3 -m http.server 8080` (or `npm start`) in the project folder, then open <http://localhost:8080>. |
+| **Just open it** | Double-click `index.html`. That's it. |
+| **GitHub Pages** | Repo → *Settings* → *Pages* → *Deploy from branch* → `main` / `/ (root)`. Live at `https://<you>.github.io/<repo>/`. |
 
-> Opening `index.html` by double-clicking **won't work**. Browsers block ES modules and `fetch()` on `file://` URLs, so you need a local server.
+> **Uploading through the GitHub website?** Dragging files one by one can flatten folders. Make sure `index.html` ends up in the **root** of the repo. The `src/` folder only matters if you want to edit the code.
 
 🎧 **Play with headphones.** The footsteps are panned left and right, and they really do get closer.
 
@@ -44,7 +44,10 @@ Add `?debug` to the URL (`index.html?debug`) to expose `window.game` in the cons
 * **The Hook:** In ordinary trivia you casually read a question. Here you're trapped under a bed or inside a closet with a 10-second countdown, a violently shaking UI, and heavy footsteps getting louder in your headphones.
 * **Target Audience:** Fans of indie horror games (*Granny*, *Five Nights at Freddy's*, *Buckshot Roulette*) and hardcore horror movie buffs who want high-stakes replayability.
 
-![The bedroom](docs/screenshots/bedroom.png)
+| | |
+|---|---|
+| ![Bedroom](docs/screenshots/bedroom.png) | ![Hallway](docs/screenshots/hallway.png) |
+| ![Kitchen](docs/screenshots/kitchen.png) | ![Foyer](docs/screenshots/foyer.png) |
 
 ---
 
@@ -54,8 +57,9 @@ Add `?debug` to the URL (`index.html?debug`) to expose `window.game` in the cons
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Frontend | HTML5, CSS3, **Vanilla JavaScript (ES6 modules)** | No framework, no bundler. Easy to host on GitHub Pages. |
-| Atmosphere | CSS | Vignette, blood overlay, cursor-following flashlight (`radial-gradient` + CSS variables), `@keyframes` screen shake and glitch text, canvas TV static |
+| Frontend | HTML5, CSS3, **Vanilla JavaScript (ES6 modules)** | No framework. A 60-line zero-dependency build script (`build.mjs`) inlines everything into one `index.html`. |
+| Graphics | **Procedural SVG** (no image files) | Five perspective-drawn rooms with filter-generated textures (film grain, water stains), damask wallpaper, checker and plank floors, and layered light (moonlight shafts, bare bulbs, boiler glow). Each room has an animated layer: rain and lightning, flickering bulbs, a dripping tap, a swinging pendulum, curtains swaying, a shadow passing under the door, dust in the light. |
+| Atmosphere | CSS | Vignette, blood overlay, cursor-following flashlight (`radial-gradient` + CSS variables), `@keyframes` screen shake and glitch text, canvas TV static, a **view from your hiding spot** during encounters (bed slats, closet louvres, a sliver of light through the pantry door) |
 | Audio | **Web Audio API, fully procedural** | Every sound (ambient drone, heartbeat, panned footsteps, creaks, whispers, hammer smash, jump scare) is synthesized at runtime, so there are **no audio files to license**. |
 | Storage | `localStorage` | Settings, high score, fastest escape, lifetime stats and achievements |
 | Tests | Node's built-in test runner | `npm test`. The game logic doesn't touch the DOM, so it is tested headlessly. |
@@ -146,6 +150,7 @@ npm test     # or: node --test tests/*.test.mjs
 * **`js/trivia.js`**: a `TriviaEngine` that draws **random, non-repeating** questions weighted by difficulty, shuffles the answer order every time, and only recycles questions once the whole pool has been used. It also has `validateQuestions()` (run in the tests and on page load).
 
 ### ✅ Phase 3: Atmosphere & Sound Design
+* Hand-coded SVG rooms with textures, lighting and an animated layer, plus a title screen showing the house on the hill with one window lit.
 * Dark-mode CSS, cursor-following flashlight (`--mx`/`--my` radial gradient), a pitch-black basement that only your beam can reveal, CSS `@keyframes` shake whose strength rises as the timer runs out, glitch title, canvas TV static, day-based blood vignette.
 * **Procedural sound instead of .mp3/.wav files:** creaking wood, heavy panned footsteps that get closer, a heartbeat whose tempo follows your noise level (52 → 150 bpm), a detuned tritone drone, whispers from Day 3 on, and the jump scare.
 
@@ -161,24 +166,32 @@ npm test     # or: node --test tests/*.test.mjs
 
 ```
 dont-make-a-sound/
-├── index.html            # All screens & overlays
-├── css/style.css         # Atmosphere: vignette, flashlight, shake, glitch, layout
-├── js/
-│   ├── main.js           # UI layer: rendering, encounters, timers, input, ambience
-│   ├── state.js          # Game state machine (no DOM)
-│   ├── trivia.js         # TriviaEngine + question validator (no DOM)
-│   ├── config.js         # Rooms, hotspots, items, noise costs, difficulty: tweak here
-│   ├── audio.js          # Procedural Web Audio sound engine
-│   ├── storage.js        # localStorage: settings, high scores, achievements
-│   └── art.js            # Inline SVG room silhouettes + hotspot positions
-├── data/questions.json   # The trivia database
-├── tests/game.test.mjs   # Headless logic tests
+├── index.html            # ← THE GAME. Built single file; open it or serve it.
+├── build.mjs             # Rebuilds index.html from src/ (node build.mjs)
+├── src/                  # Editable source
+│   ├── index.html        # Page template: screens & overlays
+│   ├── css/style.css     # Atmosphere, layout, fx animations
+│   ├── data/questions.json
+│   └── js/
+│       ├── main.js       # UI layer: rendering, encounters, timers, input, ambience
+│       ├── state.js      # Game state machine (no DOM)
+│       ├── trivia.js     # TriviaEngine + question validator (no DOM)
+│       ├── config.js     # Rooms, hotspots, items, noise costs, difficulty: tweak here
+│       ├── art.js        # Procedural SVG rooms + title art + hotspot coordinates
+│       ├── audio.js      # Procedural Web Audio sound engine
+│       └── storage.js    # localStorage: settings, high scores, achievements
+├── tests/game.test.mjs   # Headless logic tests (npm test)
 └── docs/screenshots/
 ```
 
+### Editing workflow
+1. Change anything in `src/`.
+2. Preview while you work: `npm run dev` (serves `src/` at <http://localhost:8080>).
+3. Run `npm run build` (or `node build.mjs`) to regenerate the root `index.html`, then commit both.
+
 ### Adding questions
 
-Add an entry to `data/questions.json`:
+Add an entry to `src/data/questions.json`, then rebuild:
 
 ```json
 {
@@ -195,7 +208,7 @@ Add an entry to `data/questions.json`:
 * `id`s must be unique. Run `npm test`: the validator catches duplicates, bad difficulties, out-of-range answers and repeated options.
 
 ### Tuning balance
-Every number (noise costs, timers, room danger levels, which hotspot gives which item) lives in **`js/config.js`**.
+Every number (noise costs, timers, room danger levels, which hotspot gives which item) lives in **`src/js/config.js`**. Hotspot positions live in `HOTSPOT_XY` in `src/js/art.js`, in the same 1600×900 coordinates as the drawings.
 
 ### Achievements (saved locally)
 First Blood · Final Girl · Ghost · Last Breath · Waking Nightmare · Don't Look Back · Horror Scholar · Ice in the Veins
@@ -207,7 +220,7 @@ First Blood · Final Girl · Ghost · Last Breath · Waking Nightmare · Don't L
 Ordered by priority. Each item is written to become a GitHub Issue. Suggested labels are in brackets.
 
 ### 🔴 P1: Next up (post-MVP polish)
-- [ ] **Real illustrated room art** `[art]`: replace the SVG silhouettes in `js/art.js` with painted/pixel backgrounds (`assets/rooms/*.webp`) and line up hotspot positions in `HOTSPOT_POS`.
+- [ ] **Painted room art (optional)** `[art]`: the SVG rooms could be swapped for painted or pixel-art backgrounds (`assets/rooms/*.webp`) drawn at 1600×900, so the existing `HOTSPOT_XY` coordinates still line up.
 - [ ] **Optional recorded audio layer** `[audio]`: let `AudioEngine` load royalty-free samples from `assets/audio/` (CC0 sources such as freesound.org) for footsteps and the scream, and fall back to the synthesized sounds if loading fails.
 - [ ] **Pursuer roaming AI** `[gameplay]`: the pursuer patrols between rooms on a timer instead of only reacting at 100%. Its position (heard through panned footsteps) raises danger in the rooms next to it.
 - [ ] **Noise decay & "freeze" mechanic** `[gameplay]`: hold a key to stand perfectly still; noise slowly drains, but the clock keeps ticking.
@@ -241,7 +254,8 @@ Ordered by priority. Each item is written to become a GitHub Issue. Suggested la
 - [ ] **Consider a React port** `[tech]`: only if the UI grows complex enough to need it. The state machine is already framework-agnostic.
 
 ### 🐛 Known issues / limitations
-- [ ] Hotspot buttons are positioned by percentage, so on very wide or very tall windows they can drift away from the silhouettes they label.
+- [ ] On very wide or very tall windows the 16:9 room picture is letterboxed with black bars.
+- [ ] Rooms use SVG filters; on very old phones the first render of a room can take a moment.
 - [ ] Browsers need one click before any audio plays (an autoplay policy). The *Enter the house* button handles this, but the title screen itself is silent.
 - [ ] Safari's older `webkitAudioContext` is supported, but low-power mode may throttle the heartbeat timer.
 
@@ -251,6 +265,6 @@ Ordered by priority. Each item is written to become a GitHub Issue. Suggested la
 
 * Code: MIT (see `LICENSE`).
 * Fonts: [Special Elite](https://fonts.google.com/specimen/Special+Elite) and [IBM Plex Mono](https://fonts.google.com/specimen/IBM+Plex+Mono), both under the SIL Open Font License.
-* All sound is generated in code. All art is original inline SVG.
+* All sound is generated in code. All art is original procedural SVG.
 * Trivia questions reference films and games for commentary and quiz purposes only. All titles and characters belong to their respective owners, and this project is not affiliated with any of them.
 * Inspired by *Granny* (DVloper), *Five Nights at Freddy's* (Scott Cawthon) and *Buckshot Roulette* (Mike Klubnika).
