@@ -332,7 +332,7 @@ function readInput(dt = 1 / 60) {
 
 function bindInput() {
   window.addEventListener('keydown', (ev) => {
-    if (ev.code === 'Escape') { closePanels(); return; }
+    if (ev.code === 'Escape') { closePanels(); if (freeMouse && game && game.phase === 'play' && !paused && !encounterActive) setPaused(true); return; }
     if (!game) return;
     if (encounterActive && !el.encBody.hidden && !answered) {
       const n = Number(ev.key);
@@ -349,18 +349,33 @@ function bindInput() {
   window.addEventListener('keyup', (ev) => keys.delete(ev.code));
   window.addEventListener('blur', () => keys.clear());
 
-  // mouse look with pointer lock
-  el.view.addEventListener('click', () => { if (!isTouch && game && game.phase === 'play') el.view.requestPointerLock?.(); });
-  el.pause.addEventListener('click', (ev) => { if (ev.target.id === 'btn-quit') return; if (!isTouch) el.view.requestPointerLock?.(); else setPaused(false); });
+  // mouse look: pointer lock on whichever canvas is showing. If the browser won't lock the
+  // mouse (embedded previews, some browsers, too soon after Esc), fall back to drag-to-look
+  // rather than leaving the game stuck behind the pause screen.
+  const surfaces = [el.view, $('#view3d')];
+  const playing = () => game && game.phase === 'play';
+  for (const sf of surfaces) {
+    sf.addEventListener('click', () => { if (!isTouch && playing() && !document.pointerLockElement && !paused) lockMouse(true); });
+    sf.addEventListener('mousedown', (ev) => {
+      if (ev.button !== 0) return;
+      if (document.pointerLockElement) { game?.interact(); return; }
+      if (freeMouse) { dragging = true; dragMoved = 0; }
+    });
+  }
+  window.addEventListener('mouseup', () => {
+    if (dragging && dragMoved < 6 && !paused) game?.interact();
+    dragging = false;
+  });
+  el.pause.addEventListener('click', (ev) => { if (ev.target.id === 'btn-quit') return; lockMouse(); });
   document.addEventListener('pointerlockchange', () => {
-    const locked = document.pointerLockElement === el.view;
-    if (locked) setPaused(false);
-    else if (game && game.phase === 'play' && !encounterActive) setPaused(true);
+    if (document.pointerLockElement) { freeMouse = false; setPaused(false); return; }
+    if (playing() && !encounterActive && !freeMouse) setPaused(true);
   });
+  document.addEventListener('pointerlockerror', () => lockFailed());
   document.addEventListener('mousemove', (ev) => {
-    if (document.pointerLockElement === el.view) { mouseDX += ev.movementX; mouseDY += ev.movementY; }
+    if (document.pointerLockElement) { mouseDX += ev.movementX; mouseDY += ev.movementY; }
+    else if (freeMouse && dragging) { mouseDX += ev.movementX * 1.4; mouseDY += ev.movementY * 1.4; dragMoved += Math.abs(ev.movementX) + Math.abs(ev.movementY); }
   });
-  el.view.addEventListener('mousedown', (ev) => { if (document.pointerLockElement === el.view && ev.button === 0) game?.interact(); });
 
   // touch: joystick + look pad + buttons
   if (isTouch) {
@@ -396,6 +411,28 @@ function bindInput() {
     tap('#t-crouch', () => { touchState.crouch = !touchState.crouch; $('#t-crouch').classList.toggle('on', touchState.crouch); if (touchState.crouch) { touchState.run = false; $('#t-run').classList.remove('on'); } });
     tap('#t-run', () => { touchState.run = !touchState.run; $('#t-run').classList.toggle('on', touchState.run); if (touchState.run) { touchState.crouch = false; $('#t-crouch').classList.remove('on'); } });
   }
+}
+
+let freeMouse = false, dragging = false, dragMoved = 0, lockTimer = 0, toldFree = false;
+const lockSurface = () => (el.body.classList.contains('hd') ? $('#view3d') : el.view);
+/** Ask for mouse lock; if it doesn't come, play on with drag-to-look. */
+function lockMouse(quiet = false) {
+  if (isTouch) { setPaused(false); return; }
+  const t = lockSurface();
+  clearTimeout(lockTimer);
+  try {
+    const r = t.requestPointerLock?.();
+    if (r && typeof r.catch === 'function') r.catch(() => lockFailed(quiet));
+    if (!t.requestPointerLock) { lockFailed(quiet); return; }
+  } catch { lockFailed(quiet); return; }
+  lockTimer = setTimeout(() => { if (!document.pointerLockElement) lockFailed(quiet); }, 700);
+}
+function lockFailed(quiet = false) {
+  clearTimeout(lockTimer);
+  if (document.pointerLockElement) return;
+  freeMouse = true;
+  if (paused) setPaused(false);
+  if (!toldFree && !quiet) { toldFree = true; toast('Hold the mouse button and drag to look around · click to interact · Esc to pause'); }
 }
 
 function setPaused(p) {
@@ -607,7 +644,7 @@ async function submitAnswer(choice, token) {
       if (token === runToken) showEnd();
       return;
   }
-  if (!isTouch && !paused) el.view.requestPointerLock?.();
+  if (!isTouch && !paused) lockMouse(true);
 }
 
 async function caughtSequence(token) {
@@ -640,7 +677,7 @@ function wakeUp() {
   el.body.dataset.phase = 'play';
   el.hideOverlay.dataset.view = '';
   el.body.dataset.hidden = '';
-  if (!isTouch) el.view.requestPointerLock?.();
+  if (!isTouch) lockMouse(true);
 }
 
 function showEnd() {
