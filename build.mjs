@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const src = (p) => readFileSync(new URL(`./src/${p}`, import.meta.url), 'utf8');
-const ORDER = ['config', 'trivia', 'state', 'audio', 'storage', 'art', 'main']; // dependency order
+const ORDER = ['trivia', 'world', 'scares', 'game', 'textures', 'texhd', 'render', 'render3d', 'sprites', 'audio', 'scare', 'storage', 'art', 'main']; // dependency order
 
 function bundleModule(name) {
   let code = src(`js/${name}.js`);
@@ -16,7 +16,7 @@ function bundleModule(name) {
 
   // import { a, b } from './x.js';   →  const { a, b } = __m.x;
   code = code.replace(/^import\s*\{([^}]+)\}\s*from\s*'\.\/(\w+)\.js';?$/gm,
-    (_, names, mod) => `const {${names}} = __m.${mod};`);
+    (_, names, mod) => `const {${names.replace(/(\w+)\s+as\s+(\w+)/g, '$1: $2')}} = __m.${mod};`);
   // import * as s from './x.js';     →  const s = __m.x;
   code = code.replace(/^import\s+\*\s+as\s+(\w+)\s+from\s*'\.\/(\w+)\.js';?$/gm,
     (_, alias, mod) => `const ${alias} = __m.${mod};`);

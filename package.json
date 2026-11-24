@@ -1,7 +1,7 @@
 {
   "name": "dont-make-a-sound",
   "version": "0.1.0",
-  "description": "A browser-based horror stealth escape game powered by horror trivia.",
+  "description": "A first-person browser horror game: escape the house in five days. She hunts by sound, and horror trivia keeps you hidden.",
   "type": "module",
   "private": true,
   "scripts": {
