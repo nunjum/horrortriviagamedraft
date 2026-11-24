@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Don't Make a Sound</title>
+  <meta name="description" content="A browser horror stealth escape game where horror trivia is the only thing keeping you hidden." />
+  <meta name="theme-color" content="#050505" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23000'/><circle cx='35' cy='42' r='8' fill='%23b00'/><circle cx='65' cy='42' r='8' fill='%23b00'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-day="1" data-phase="title">
+  <canvas id="static" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="blood" aria-hidden="true"></div>
+
+  <!-- ═════════════ TITLE ═════════════ -->
+  <section id="screen-title" class="screen active" aria-labelledby="game-title">
+    <div class="title-wrap">
+      <p class="kicker">a horror trivia stealth game</p>
+      <h1 id="game-title" class="glitch" data-text="DON'T MAKE A SOUND">DON'T MAKE A SOUND</h1>
+      <p class="tagline">Five days. One locked house. It hunts by sound —<br />and only what you know about horror will keep you hidden.</p>
+      <nav class="menu">
+        <button class="btn btn-primary" id="btn-start">Enter the house</button>
+        <button class="btn" data-open="panel-howto">How to survive</button>
+        <button class="btn" data-open="panel-achievements">Achievements</button>
+        <button class="btn" data-open="panel-settings">Settings</button>
+      </nav>
+      <p class="best" id="title-best"></p>
+      <p class="warning">🎧 Headphones recommended. Contains jump scares, loud sounds and flashing images —<br />turn on <strong>Reduced effects</strong> in Settings if you need to.</p>
+    </div>
+  </section>
+
+  <!-- ═════════════ GAME ═════════════ -->
+  <section id="screen-game" class="screen" aria-label="The house">
+    <header class="hud">
+      <div class="hud-day" aria-live="polite">
+        <span class="hud-label">Day</span>
+        <span id="day-num">1</span><span class="of">/ 5</span>
+      </div>
+      <div class="hud-noise">
+        <div class="hud-label">Noise <span id="noise-val">0%</span></div>
+        <div class="meter" role="meter" aria-label="Noise level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="noise-meter">
+          <div class="meter-fill" id="noise-fill"></div>
+          <div class="meter-tick" style="left:50%"></div>
+          <div class="meter-tick" style="left:75%"></div>
+        </div>
+      </div>
+      <div class="hud-actions">
+        <button class="btn btn-small" id="btn-flashlight" disabled title="Flashlight (F)">Flashlight <kbd>F</kbd></button>
+        <button class="btn btn-small" id="btn-mute" title="Mute (M)">Sound <kbd>M</kbd></button>
+        <button class="btn btn-small" id="btn-quit" title="Back to title">Quit</button>
+      </div>
+    </header>
+
+    <div class="stage">
+      <main class="scene" id="scene" data-room="bedroom">
+        <div class="room-art" id="room-art" aria-hidden="true"></div>
+        <div class="room-text">
+          <h2 id="room-name">Bedroom</h2>
+          <p id="room-desc"></p>
+        </div>
+        <div class="hotspots" id="hotspots"></div>
+        <nav class="exits" id="exits" aria-label="Doors"></nav>
+        <div class="darkness" id="darkness" aria-hidden="true"></div>
+      </main>
+
+      <aside class="side">
+        <h3>Pockets</h3>
+        <ul class="inventory" id="inventory"></ul>
+        <h3>Journal</h3>
+        <ol class="log" id="log" aria-live="polite"></ol>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ═════════════ ENCOUNTER (pursuit / lockpick / standoff) ═════════════ -->
+  <div class="overlay encounter" id="encounter" hidden role="dialog" aria-modal="true" aria-labelledby="enc-title">
+    <div class="enc-box" id="enc-box">
+      <p class="enc-kind" id="enc-title"></p>
+      <p class="enc-intro" id="enc-intro"></p>
+      <div class="enc-body" id="enc-body" hidden>
+        <div class="enc-progress" id="enc-progress"></div>
+        <div class="timer"><div class="timer-fill" id="timer-fill"></div></div>
+        <div class="timer-num" id="timer-num">10</div>
+        <h2 class="enc-question" id="enc-question"></h2>
+        <div class="enc-options" id="enc-options"></div>
+        <p class="enc-hint">Press <kbd>1</kbd>–<kbd>4</kbd> to answer</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════ JUMP SCARE ═════════════ -->
+  <div class="jumpscare" id="jumpscare" hidden aria-hidden="true">
+    <svg viewBox="0 0 400 500" class="face" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <filter id="warp" x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="13" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="22" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" />
+          <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0" />
+          <feComposite in2="SourceGraphic" operator="in" />
+        </filter>
+        <radialGradient id="skin" cx="50%" cy="34%" r="66%">
+          <stop offset="0%" stop-color="#ebe7dc" />
+          <stop offset="45%" stop-color="#a49e93" />
+          <stop offset="78%" stop-color="#3a3632" />
+          <stop offset="100%" stop-color="#000" />
+        </radialGradient>
+        <radialGradient id="socket">
+          <stop offset="45%" stop-color="#000" />
+          <stop offset="100%" stop-color="#000" stop-opacity="0" />
+        </radialGradient>
+        <linearGradient id="maw" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1a0000" />
+          <stop offset="0.4" stop-color="#000" />
+        </linearGradient>
+      </defs>
+      <g filter="url(#warp)">
+        <path id="head" d="M200 8 C305 14 345 115 338 232 C330 345 282 470 200 496 C118 470 70 345 62 232 C55 115 95 14 200 8Z" fill="url(#skin)" />
+        <ellipse cx="112" cy="330" rx="40" ry="70" fill="#000" opacity="0.35" />
+        <ellipse cx="290" cy="330" rx="40" ry="70" fill="#000" opacity="0.35" />
+        <ellipse cx="128" cy="212" rx="78" ry="88" fill="url(#socket)" />
+        <ellipse cx="276" cy="200" rx="72" ry="94" fill="url(#socket)" />
+        <ellipse cx="130" cy="216" rx="34" ry="48" fill="#000" />
+        <ellipse cx="274" cy="204" rx="30" ry="54" fill="#000" />
+        <circle cx="137" cy="222" r="4" fill="#fff" />
+        <circle cx="268" cy="214" r="3" fill="#fff" />
+        <path d="M122 262 C118 300 128 340 120 400" stroke="#000" stroke-width="7" fill="none" opacity="0.8" />
+        <path d="M282 256 C290 300 276 350 286 420" stroke="#000" stroke-width="5" fill="none" opacity="0.7" />
+        <path d="M192 268 l-8 34 l10 -4z M210 268 l8 34 l-10 -4z" fill="#000" opacity="0.85" />
+        <path d="M146 336 Q200 318 256 334 Q266 440 200 492 Q134 440 146 336Z" fill="url(#maw)" />
+        <path d="M156 338 l6 18 l5 -19 l8 24 l4 -26 l9 21 l6 -22 l7 27 l5 -25 l9 19 l6 -21 l8 16 l5 -14" fill="#d9d2c0" opacity="0.9" />
+      </g>
+      <use href="#head" filter="url(#grain)" />
+    </svg>
+  </div>
+
+  <!-- ═════════════ DAY TRANSITION ═════════════ -->
+  <div class="overlay wake" id="wake" hidden role="dialog" aria-modal="true" aria-labelledby="wake-day">
+    <div class="wake-box">
+      <h2 id="wake-day">DAY 2</h2>
+      <p id="wake-text"></p>
+      <button class="btn btn-primary" id="btn-wake">Open your eyes</button>
+    </div>
+  </div>
+
+  <!-- ═════════════ END SCREEN ═════════════ -->
+  <div class="overlay end" id="end" hidden role="dialog" aria-modal="true" aria-labelledby="end-title">
+    <div class="end-box">
+      <h2 id="end-title" class="glitch" data-text=""></h2>
+      <p id="end-text"></p>
+      <dl class="end-stats" id="end-stats"></dl>
+      <div id="end-unlocks"></div>
+      <div class="end-actions">
+        <button class="btn btn-primary" id="btn-again">Try again</button>
+        <button class="btn" id="btn-title">Title screen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════ PANELS ═════════════ -->
+  <div class="overlay panel" id="panel-howto" hidden role="dialog" aria-modal="true" aria-labelledby="howto-h">
+    <div class="panel-box">
+      <h2 id="howto-h">How to survive</h2>
+      <ul class="howto">
+        <li><strong>Find three things:</strong> the <em>Basement Key</em>, the <em>Bolt Cutters</em> and the <em>Master Key</em>. Then reach the front door.</li>
+        <li><strong>Every action makes noise.</strong> Walking +10%, the creaky hallway +5% more, searching +25%, the hammer +50%.</li>
+        <li><strong>At 100% noise it comes for you.</strong> You hide, and must answer 1–3 horror trivia questions before the timer runs out.</li>
+        <li><strong>Survive</strong> and it walks away (noise drops to 20%). <strong>Fail</strong> and you wake up the next day in the bedroom.</li>
+        <li><strong>Get caught on Day 5</strong> and you never leave.</li>
+        <li><strong>Hide under the bed</strong> to calm the house (−30% noise, once per visit).</li>
+        <li><strong>The basement is dark.</strong> Use the flashlight (<kbd>F</kbd>) — but light spilling under doors makes walking a little louder.</li>
+      </ul>
+      <button class="btn" data-close>Got it</button>
+    </div>
+  </div>
+
+  <div class="overlay panel" id="panel-achievements" hidden role="dialog" aria-modal="true" aria-labelledby="ach-h">
+    <div class="panel-box">
+      <h2 id="ach-h">Achievements</h2>
+      <dl class="stats" id="stats-list"></dl>
+      <ul class="achievements" id="ach-list"></ul>
+      <button class="btn" data-close>Close</button>
+    </div>
+  </div>
+
+  <div class="overlay panel" id="panel-settings" hidden role="dialog" aria-modal="true" aria-labelledby="set-h">
+    <div class="panel-box">
+      <h2 id="set-h">Settings</h2>
+      <fieldset class="setting">
+        <legend>Difficulty</legend>
+        <label><input type="radio" name="difficulty" value="easy" /> Easy — 15s per question, quieter footsteps</label>
+        <label><input type="radio" name="difficulty" value="normal" /> Normal — 10s per question</label>
+        <label><input type="radio" name="difficulty" value="nightmare" /> Nightmare — 7s, harder questions, louder everything</label>
+      </fieldset>
+      <label class="setting">Volume
+        <input type="range" id="set-volume" min="0" max="1" step="0.05" />
+      </label>
+      <label class="setting check"><input type="checkbox" id="set-reduced" /> Reduced effects (no screen shake, no flashing, softer jump scares)</label>
+      <div class="setting-actions">
+        <button class="btn btn-danger" id="btn-reset">Reset progress</button>
+        <button class="btn" data-close>Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <noscript><p class="noscript">This game needs JavaScript. The house is very quiet without it.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
